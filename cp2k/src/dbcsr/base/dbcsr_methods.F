@@ -71,12 +71,13 @@ MODULE dbcsr_methods
 
    PUBLIC :: dbcsr_destroy_array
    PUBLIC :: dbcsr_image_dist_init, dbcsr_image_dist_hold, dbcsr_image_dist_release
+   PUBLIC :: dbcsr_matrix_hold
 
    PUBLIC :: dbcsr_mutable_init, dbcsr_mutable_new, dbcsr_mutable_destroy, &
              dbcsr_mutable_release, &
              dbcsr_mutable_instantiated
 
-   PUBLIC :: dbcsr_distribution_release, dbcsr_distribution_init
+   PUBLIC :: dbcsr_distribution_hold, dbcsr_distribution_release, dbcsr_distribution_init
    PUBLIC :: dbcsr_mp_release, dbcsr_mp_grid_remove
 
    INTERFACE dbcsr_init
@@ -306,6 +307,16 @@ CONTAINS
          ENDIF
       ENDIF
    END SUBROUTINE dbcsr_distribution_release
+
+! **************************************************************************************************
+!> \brief Retains a reference to a distribution
+!> \param dist ...
+! **************************************************************************************************
+   SUBROUTINE dbcsr_distribution_hold(dist)
+      TYPE(dbcsr_distribution_obj), INTENT(INOUT)        :: dist
+
+      dist%d%refcount = dist%d%refcount+1
+   END SUBROUTINE dbcsr_distribution_hold
 
 ! **************************************************************************************************
 !> \brief ...
@@ -1022,6 +1033,16 @@ CONTAINS
          ENDIF
       ENDIF
    END SUBROUTINE dbcsr_image_dist_release
+
+! **************************************************************************************************
+!> \brief Retains a reference to a matrix
+!> \param matrix ...
+! **************************************************************************************************
+   SUBROUTINE dbcsr_matrix_hold(matrix)
+      TYPE(dbcsr_obj), INTENT(INOUT)                     :: matrix
+
+      matrix%m%refcount = matrix%m%refcount+1
+   END SUBROUTINE dbcsr_matrix_hold
 
 ! **************************************************************************************************
 !> \brief Retains a reference to an image distribution
