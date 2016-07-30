@@ -20,10 +20,11 @@
 #define CPWARN(msg) CALL cp__w(__SHORT_FILE__,__LINE__,msg)
 #define CPABORT(msg) CALL cp__b(__SHORT_FILE__,__LINE__,msg)
 
-#if !defined(NDEBUG)
-# define CPASSERT(cond) IF(.NOT.(cond))CALL cp__a(__SHORT_FILE__,__LINE__)
-#else
+! CPASSERT appears to have side-effects, and it cannot be compiled out.
+#if defined(NDEBUG) && 0
 # define CPASSERT(cond)
+#else
+# define CPASSERT(cond) IF(.NOT.(cond))CALL cp__a(__SHORT_FILE__,__LINE__)
 #endif
 
 ! The MARK_USED macro can be used to mark an argument/variable as used.
