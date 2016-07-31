@@ -336,24 +336,8 @@ ifneq (,$(LIBXSMMROOT))
       endif
     endif
 
-    ifeq (1,$(shell echo $$((0==$(JIT) || 1!=($(SSE)+1)))))
+    ifeq (1,$(shell echo "$$((0>=$(JIT)))"))
       LIBXSMM_MNK := "23, 6, 14 16 29, 14 32 29, 5 32 13 24 26, 9 32 22, 64, 78, 16 29 55, 32 29 55, 12, 4 5 7 9 13 25 26 28 32 45"
-    endif
-    LIBXSMM_ALIGNED_STORES := 0
-    LIBXSMM_PREFETCH := 0
-    ifneq (0,$(OMP))
-      ifneq (0,$(NESTED))
-        LIBXSMM_ALIGNED_STORES := 1
-      endif
-    endif
-    ifneq (0,$(ACC))
-      ifneq (0,$(OFFLOAD))
-        LIBXSMM_ALIGNED_STORES := 1
-        LIBXSMM_PREFETCH := 1
-      endif
-    endif
-    ifneq (,$(filter %MIC-AVX512,$(TARGET)))
-      LIBXSMM_PREFETCH := 1
     endif
     LIBXSMM_MPSS := 0
     ifneq (0,$(MIC))
@@ -372,8 +356,7 @@ $(LIBXSMM_LIB): .state
 		BLDDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/build \
 		BINDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/bin \
 		OUTDIR=$(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib \
-		MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
-		ALIGNED_STORES=$(LIBXSMM_ALIGNED_STORES) PREFETCH=$(LIBXSMM_PREFETCH) JIT=$(JIT) \
+		JIT=$(JIT) MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
 		PTHREAD=$(OMP) OPT=$(OPT) IPO=$(IPO) TARGET=$(TARGET) SSE=$(SSE) AVX=$(AVX) \
 		SYM=$(SYM) DBG=$(DBG) MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD) MIC=$(MIC)
 LIBXSMM_UPTODATE_CHECK := $(shell touch .state)
