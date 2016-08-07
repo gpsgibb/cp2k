@@ -188,11 +188,12 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
 # endif
 #endif
   }
-
+#if 0 // check if disabling densification is still beneficial after Cannon rework
   if (0 <= dense_mult) {
     extern int LIBXSMM_ACC_FSYMBOL(dbcsr_mm_cannon_mp_dense_mult_default);
     LIBXSMM_ACC_FSYMBOL(dbcsr_mm_cannon_mp_dense_mult_default) = dense_mult;
   }
+#endif
 }
 
 
