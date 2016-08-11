@@ -39,10 +39,7 @@ MODULE qs_nl_hash_table_types
 ! public methods
    PUBLIC :: nl_hash_table_create, & !create new table
              nl_hash_table_release, & !destroy existing table
-             nl_hash_table_has_data, & !check whether table has any data associated with it
-             nl_hash_table_nullify, &
              nl_hash_table_add, & !add a new entry to the table
-             nl_hash_table_get, & !given a key, return the value from table
              nl_hash_table_get_from_index, & !return the value from the specified index of the table
              nl_hash_table_is_null, &
              nl_hash_table_status
@@ -175,39 +172,6 @@ CONTAINS
       last_nl_hash_table_id = hash_table%obj%id_nr
    END SUBROUTINE nl_hash_table_create
 
-! ************************************************************************************************
-!> \brief Retrieve value from a key from a hash table
-!> \param hash_table : the nl_hash_table object
-!> \param key        : input key
-!> \param val        : output value, equals to 0 if key not found
-!> \param found      : .TRUE. if key is found, .FALSE. otherwise
-! **************************************************************************************************
-   SUBROUTINE nl_hash_table_get(hash_table, key, val, found)
-      TYPE(nl_hash_table_obj), INTENT(IN)                :: hash_table
-      INTEGER(KIND=int_8), INTENT(IN)                    :: key
-      TYPE(neighbor_list_task_type), INTENT(OUT), &
-         POINTER                                         :: val
-      LOGICAL, INTENT(OUT)                               :: found
-
-      CHARACTER(len=*), PARAMETER :: routineN = 'nl_hash_table_get', &
-         routineP = moduleN//':'//routineN
-
-      INTEGER                                            :: islot
-      LOGICAL                                            :: check_ok
-
-      check_ok = nl_hash_table_has_data(hash_table)
-      CPASSERT(check_ok)
-      found = .FALSE.
-      NULLIFY (val)
-      islot = nl_hash_table_linear_probe(hash_table, key)
-      IF (islot > 0) THEN
-         IF (hash_table%obj%table(islot)%key == key) THEN
-            val => hash_table%obj%table(islot)%val
-            found = .TRUE.
-         END IF
-      END IF
-   END SUBROUTINE nl_hash_table_get
-
 ! **************************************************************************************************
 !> \brief Retrieve value from a hash table given a specified index
 !> \param hash_table : the nl_hash_table object
@@ -322,16 +286,6 @@ CONTAINS
    END SUBROUTINE nl_hash_table_is_null
 
 ! **************************************************************************************************
-!> \brief Nullifies a nl_hash_table object
-!> \param hash_table : the nl_hash_table object
-! **************************************************************************************************
-   PURE SUBROUTINE nl_hash_table_nullify(hash_table)
-      TYPE(nl_hash_table_obj), INTENT(INOUT)             :: hash_table
-
-      NULLIFY (hash_table%obj)
-   END SUBROUTINE nl_hash_table_nullify
-
-! **************************************************************************************************
 !> \brief Rehash table. If nmax is present, then also change the table size
 !>        to MAX(nmax, number_of_non_empty_elements).
 !> \param hash_table      : the nl_hash_table object
@@ -400,25 +354,6 @@ CONTAINS
          NULLIFY (hash_table%obj)
       END IF
    END SUBROUTINE nl_hash_table_release
-
-! **************************************************************************************************
-!> \brief retains given object
-!> \param hash_table : the nl_hash_table object in question
-! **************************************************************************************************
-   SUBROUTINE nl_hash_table_retain(hash_table)
-      TYPE(nl_hash_table_obj), INTENT(INOUT)             :: hash_table
-
-      CHARACTER(len=*), PARAMETER :: routineN = 'nl_hash_table_retain', &
-         routineP = moduleN//':'//routineN
-
-      LOGICAL                                            :: check_ok
-
-      check_ok = ASSOCIATED(hash_table%obj)
-      CPASSERT(check_ok)
-      check_ok = (hash_table%obj%ref_count > 0)
-      CPASSERT(check_ok)
-      hash_table%obj%ref_count = hash_table%obj%ref_count+1
-   END SUBROUTINE nl_hash_table_retain
 
 ! **************************************************************************************************
 !> \brief outputs the current information about the table

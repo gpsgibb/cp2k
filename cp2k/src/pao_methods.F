@@ -82,7 +82,6 @@ MODULE pao_methods
    PUBLIC :: pao_test_convergence
    PUBLIC :: pao_calc_energy, pao_check_trace_ps
    PUBLIC :: pao_store_P, pao_add_forces, pao_guess_initial_P
-   PUBLIC :: pao_read_preopt_dm
    PUBLIC :: pao_calc_outer_grad_lnv
    PUBLIC :: pao_check_grad
 
@@ -156,13 +155,15 @@ CONTAINS
       param_cols => cp_dbcsr_col_block_sizes(pao%matrix_X)
       CPASSERT(SIZE(param_rows) == natoms .AND. SIZE(param_cols) == natoms)
 
-      DO iatom = 1, natoms
-         IF (pao%iw > 0) WRITE (pao%iw, "(A,I7,T20,A,I3,T45,A,I3,T65,A,I3)") &
-            " PAO| atom: ", iatom, &
-            " prim_basis: ", pri_basis(iatom), &
-            " pao_basis: ", pao_basis(iatom), &
-            " pao_params: ", (param_cols(iatom)*param_rows(iatom))
-      ENDDO
+      IF (pao%iw_atoms > 0) THEN
+         DO iatom = 1, natoms
+            WRITE (pao%iw_atoms, "(A,I7,T20,A,I3,T45,A,I3,T65,A,I3)") &
+               " PAO| atom: ", iatom, &
+               " prim_basis: ", pri_basis(iatom), &
+               " pao_basis: ", pao_basis(iatom), &
+               " pao_params: ", (param_cols(iatom)*param_rows(iatom))
+         ENDDO
+      ENDIF
    END SUBROUTINE pao_print_atom_info
 
 ! **************************************************************************************************

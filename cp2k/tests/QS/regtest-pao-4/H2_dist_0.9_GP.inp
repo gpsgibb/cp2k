@@ -31,6 +31,12 @@
           GP_NOISE_VAR 0.1
           TOLERANCE 0.01
         &END MACHINE_LEARNING
+        &PRINT
+          &ML_TRAINING_DATA
+          &END ML_TRAINING_DATA
+          &ML_VARIANCE
+          &END ML_VARIANCE
+        &END PRINT
       &END PAO
     &END
     &XC
@@ -52,8 +58,8 @@
        &END
     &END
     &KIND H
-      BASIS_SET DZVP-MOLOPT-GTH
-      POTENTIAL GTH-PBE
+      BASIS_SET DZVP-MOLOPT-GTH-q1
+      POTENTIAL GTH-PBE-q1
       PAO_BASIS_SIZE 1
       &PAO_POTENTIAL
         MAXL 0

@@ -90,7 +90,7 @@ MODULE mao_methods
 
    CHARACTER(len=*), PARAMETER, PRIVATE :: moduleN = 'mao_methods'
 
-   PUBLIC ::  mao_analysis
+   PUBLIC ::  mao_analysis, mao_basis_simple
 
 ! **************************************************************************************************
 
@@ -110,17 +110,15 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'mao_analysis', routineP = moduleN//':'//routineN
 
       CHARACTER(len=2)                                   :: element_symbol, esa, esb, esc
-      INTEGER :: fall, handle, ia, iab, iabc, iatom, ib, ic, icol, ikind, im, irow, ispin, iter, &
-         jatom, mao_basis, max_iter, me, na, nab, nabc, natom, nb, nc, nimages, nocc, norb, nspin, &
-         ssize
+      INTEGER :: fall, handle, ia, iab, iabc, iatom, ib, ic, icol, ikind, irow, ispin, iter, &
+         jatom, mao_basis, max_iter, me, na, nab, nabc, natom, nb, nc, nimages, nspin, ssize
       INTEGER, DIMENSION(:), POINTER                     :: col_blk_sizes, mao_blk, mao_blk_sizes, &
                                                             orb_blk, row_blk_sizes
-      INTEGER, DIMENSION(:, :, :), POINTER               :: cell_to_index
       LOGICAL                                            :: analyze_ua, explicit, fo, for, fos, &
                                                             found, neglect_abc, print_basis
-      REAL(KIND=dp) :: a1, a2, alpha, an, beta, deltaq, electra(2), elex, eps_ab, eps_abc, &
-         eps_filter, eps_fun, eps_grad, fa1, fa2, fnnew, fnold, fval, grad_norm, senabc, senmax, &
-         threshold, total_charge, total_spin, ua_charge(2), xkp(3), zeff
+      REAL(KIND=dp) :: a1, a2, alpha, an, beta, deltaq, electra(2), eps_ab, eps_abc, eps_filter, &
+         eps_fun, eps_grad, fa1, fa2, fnnew, fnold, fval, grad_norm, senabc, senmax, threshold, &
+         total_charge, total_spin, ua_charge(2), zeff
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:, :)        :: occnumA, occnumABC, qab, qmatab, qmatac, &
                                                             qmatbc, raq, sab, selnABC, sinv, &
                                                             smatab, smatac, smatbc, uaq
@@ -135,8 +133,8 @@ CONTAINS
                                                             matrix_smo
       TYPE(cp_dbcsr_p_type), DIMENSION(:, :), POINTER    :: matrix_ks, matrix_p, matrix_s
       TYPE(cp_dbcsr_type)                                :: amat, axmat, cgmat, cholmat, crumat, &
-                                                            ksmat, pmat, qmat, qmat_diag, rumat, &
-                                                            smat, smat_diag, sumat, tmat
+                                                            qmat, qmat_diag, rumat, smat_diag, &
+                                                            sumat, tmat
       TYPE(cp_para_env_type), POINTER                    :: para_env
       TYPE(dbcsr_distribution_obj), POINTER              :: dbcsr_dist
       TYPE(dft_control_type), POINTER                    :: dft_control
@@ -211,73 +209,15 @@ CONTAINS
       CALL get_qs_env(qs_env, rho=rho, matrix_s_kp=matrix_s)
       CALL qs_rho_get(rho, rho_ao_kp=matrix_p)
       nspin = SIZE(matrix_p, 1)
-      DO ispin = 1, nspin
-         electra(ispin) = 0.0_dp
-         DO im = 1, nimages
-            CALL cp_dbcsr_trace(matrix_p(ispin, im)%matrix, matrix_s(1, im)%matrix, elex)
-            electra(ispin) = electra(ispin)+elex
-         END DO
-      END DO
-
-      ! calculate Q=APA(T) matrix, A=(MAO,ORB) overlap
+      !
       ! Q matrix
-      NULLIFY (matrix_q)
-      CALL cp_dbcsr_allocate_matrix_set(matrix_q, nspin)
-      DO ispin = 1, nspin
-         ALLOCATE (matrix_q(ispin)%matrix)
-         CALL cp_dbcsr_init(matrix_q(ispin)%matrix)
-         CALL cp_dbcsr_create(matrix_q(ispin)%matrix, template=matrix_smm(1)%matrix)
-         CALL cp_dbcsr_alloc_block_from_nbl(matrix_q(ispin)%matrix, smm_list)
-      END DO
-      ! temp matrix
-      CALL cp_dbcsr_init(tmat)
-      CALL cp_dbcsr_create(tmat, template=matrix_smo(1)%matrix, matrix_type=dbcsr_type_no_symmetry)
-      ! Q=APA(T)
-      DO ispin = 1, nspin
-         IF (nimages == 1) THEN
-            CALL cp_dbcsr_multiply("N", "N", 1.0_dp, matrix_smo(1)%matrix, matrix_p(ispin, 1)%matrix, &
-                                   0.0_dp, tmat, filter_eps=eps_filter)
-            CALL cp_dbcsr_multiply("N", "T", 1.0_dp, tmat, matrix_smo(1)%matrix, &
-                                   0.0_dp, matrix_q(ispin)%matrix, filter_eps=eps_filter)
-         ELSE
-            ! k-points
-            CALL cp_dbcsr_init(pmat)
-            CALL cp_dbcsr_create(pmat, template=matrix_s(1, 1)%matrix)
-            CALL cp_dbcsr_init(smat)
-            CALL cp_dbcsr_create(smat, template=matrix_s(1, 1)%matrix)
-            CALL cp_dbcsr_init(ksmat)
-            CALL cp_dbcsr_create(ksmat, template=matrix_s(1, 1)%matrix)
-            CALL get_qs_env(qs_env=qs_env, sab_orb=sab_orb)
-            CALL cp_dbcsr_alloc_block_from_nbl(pmat, sab_orb)
-            CALL cp_dbcsr_alloc_block_from_nbl(smat, sab_orb)
-            CALL cp_dbcsr_alloc_block_from_nbl(ksmat, sab_orb)
-            CALL get_qs_env(qs_env, kpoints=kpoints)
-            NULLIFY (cell_to_index)
-            CALL get_kpoint_info(kpoint=kpoints, cell_to_index=cell_to_index)
-            ! calculate density matrix at gamma point
-            xkp = 0.0_dp
-            ! transform KS and S matrices to the gamma point
-            CALL get_qs_env(qs_env, matrix_ks_kp=matrix_ks)
-            CALL cp_dbcsr_set(ksmat, 0.0_dp)
-            CALL rskp_transform(rmatrix=ksmat, rsmat=matrix_ks, ispin=ispin, &
-                                xkp=xkp, cell_to_index=cell_to_index, sab_nl=sab_orb)
-            CALL cp_dbcsr_set(smat, 0.0_dp)
-            CALL rskp_transform(rmatrix=smat, rsmat=matrix_s, ispin=1, &
-                                xkp=xkp, cell_to_index=cell_to_index, sab_nl=sab_orb)
-            norb = NINT(electra(ispin))
-            nocc = MOD(2, nspin)+1
-            CALL calculate_p_gamma(pmat, ksmat, smat, kpoints, norb, REAL(nocc, KIND=dp))
-            CALL cp_dbcsr_multiply("N", "N", 1.0_dp, matrix_smo(1)%matrix, pmat, &
-                                   0.0_dp, tmat, filter_eps=eps_filter)
-            CALL cp_dbcsr_multiply("N", "T", 1.0_dp, tmat, matrix_smo(1)%matrix, &
-                                   0.0_dp, matrix_q(ispin)%matrix, filter_eps=eps_filter)
-            CALL cp_dbcsr_release(pmat)
-            CALL cp_dbcsr_release(smat)
-            CALL cp_dbcsr_release(ksmat)
-         END IF
-      END DO
-      ! free temp matrix
-      CALL cp_dbcsr_release(tmat)
+      IF (nimages == 1) THEN
+         CALL mao_build_q(matrix_q, matrix_p, matrix_s, matrix_smm, matrix_smo, smm_list, electra, eps_filter)
+      ELSE
+         CALL get_qs_env(qs_env, matrix_ks_kp=matrix_ks, kpoints=kpoints)
+         CALL mao_build_q(matrix_q, matrix_p, matrix_s, matrix_smm, matrix_smo, smm_list, electra, eps_filter, &
+                          nimages=nimages, kpoints=kpoints, matrix_ks=matrix_ks, sab_orb=sab_orb)
+      END IF
 
       ! check for extended basis sets
       fall = 0
@@ -1071,6 +1011,192 @@ CONTAINS
 
 ! **************************************************************************************************
 !> \brief ...
+!> \param qs_env ...
+!> \param mao_coef ...
+!> \param ref_basis_set ...
+!> \param pmat_external ...
+!> \param smat_external ...
+!> \param unit_nr ...
+! **************************************************************************************************
+   SUBROUTINE mao_basis_simple(qs_env, mao_coef, ref_basis_set, pmat_external, smat_external, unit_nr)
+      TYPE(qs_environment_type), POINTER                 :: qs_env
+      TYPE(cp_dbcsr_p_type), DIMENSION(:), POINTER       :: mao_coef
+      CHARACTER(len=*), OPTIONAL                         :: ref_basis_set
+      TYPE(cp_dbcsr_p_type), DIMENSION(:, :), OPTIONAL, &
+         POINTER                                         :: pmat_external, smat_external
+      INTEGER, INTENT(IN)                                :: unit_nr
+
+      CHARACTER(len=*), PARAMETER :: routineN = 'mao_basis_simple', &
+         routineP = moduleN//':'//routineN
+
+      CHARACTER(len=10)                                  :: mao_basis_set
+      INTEGER                                            :: handle, iab, ikind, ispin, natom, nbas, &
+                                                            nimages, nkind, nmao, nspin
+      INTEGER, DIMENSION(:), POINTER                     :: col_blk_sizes, row_blk_sizes
+      REAL(KIND=dp)                                      :: electra(2), eps_filter, fval
+      TYPE(cp_dbcsr_p_type), DIMENSION(:), POINTER       :: matrix_q, matrix_smm, matrix_smo
+      TYPE(cp_dbcsr_p_type), DIMENSION(:, :), POINTER    :: matrix_p, matrix_s
+      TYPE(cp_dbcsr_type)                                :: tmat
+      TYPE(dbcsr_distribution_obj), POINTER              :: dbcsr_dist
+      TYPE(dft_control_type), POINTER                    :: dft_control
+      TYPE(gto_basis_set_p_type), DIMENSION(:), POINTER  :: mao_basis_set_list, orb_basis_set_list
+      TYPE(gto_basis_set_type), POINTER                  :: basis_set_a, basis_set_b
+      TYPE(neighbor_list_set_p_type), DIMENSION(:), &
+         POINTER                                         :: smm_list, smo_list
+      TYPE(particle_type), DIMENSION(:), POINTER         :: particle_set
+      TYPE(qs_kind_type), DIMENSION(:), POINTER          :: qs_kind_set
+      TYPE(qs_kind_type), POINTER                        :: qs_kind
+      TYPE(qs_ks_env_type), POINTER                      :: ks_env
+      TYPE(qs_rho_type), POINTER                         :: rho
+
+      CALL timeset(routineN, handle)
+
+      IF (unit_nr > 0) THEN
+         WRITE (unit_nr, '(/,T2,A)') '!-----------------------------------------------------------------------------!'
+         WRITE (UNIT=unit_nr, FMT="(T37,A)") "MAO BASIS"
+         WRITE (unit_nr, '(T2,A)') '!-----------------------------------------------------------------------------!'
+      END IF
+
+      ! k-points?
+      CALL get_qs_env(qs_env, dft_control=dft_control)
+      nimages = dft_control%nimages
+      CPASSERT(nimages == 1)
+
+      ! Reference basis set
+      IF (PRESENT(ref_basis_set)) THEN
+         mao_basis_set = ref_basis_set
+      ELSE
+         mao_basis_set = "ORB"
+      END IF
+      CALL get_qs_env(qs_env=qs_env, qs_kind_set=qs_kind_set)
+      nkind = SIZE(qs_kind_set)
+      ALLOCATE (mao_basis_set_list(nkind), orb_basis_set_list(nkind))
+      DO ikind = 1, nkind
+         qs_kind => qs_kind_set(ikind)
+         NULLIFY (mao_basis_set_list(ikind)%gto_basis_set)
+         NULLIFY (orb_basis_set_list(ikind)%gto_basis_set)
+         NULLIFY (basis_set_a, basis_set_b)
+         CALL get_qs_kind(qs_kind=qs_kind, basis_set=basis_set_a, basis_type="ORB")
+         IF (ASSOCIATED(basis_set_a)) orb_basis_set_list(ikind)%gto_basis_set => basis_set_a
+         CALL get_qs_kind(qs_kind=qs_kind, basis_set=basis_set_b, basis_type=mao_basis_set)
+         IF (ASSOCIATED(basis_set_b)) mao_basis_set_list(ikind)%gto_basis_set => basis_set_b
+      END DO
+      IF (unit_nr > 0) THEN
+         DO ikind = 1, nkind
+            IF (.NOT. ASSOCIATED(mao_basis_set_list(ikind)%gto_basis_set)) THEN
+               WRITE (UNIT=unit_nr, FMT="(T2,A,I4)") &
+                  "WARNING: No MAO basis set associated with Kind ", ikind
+            ELSE
+               CALL get_qs_kind(qs_kind_set(ikind), mao=nmao)
+               nbas = mao_basis_set_list(ikind)%gto_basis_set%nsgf
+               WRITE (UNIT=unit_nr, FMT="(T2,A,I4,T30,A,I2,T56,A,I10)") &
+                  "MAO basis set Kind ", ikind, " Number of MAO:", nmao, " Number of BSF:", nbas
+            END IF
+         END DO
+      END IF
+
+      ! neighbor lists
+      NULLIFY (smm_list, smo_list)
+      CALL setup_neighbor_list(smm_list, mao_basis_set_list, qs_env=qs_env)
+      CALL setup_neighbor_list(smo_list, mao_basis_set_list, orb_basis_set_list, qs_env=qs_env)
+
+      ! overlap matrices
+      NULLIFY (matrix_smm, matrix_smo)
+      CALL get_qs_env(qs_env, ks_env=ks_env)
+      CALL build_overlap_matrix_simple(ks_env, matrix_smm, &
+                                       mao_basis_set_list, mao_basis_set_list, smm_list)
+      CALL build_overlap_matrix_simple(ks_env, matrix_smo, &
+                                       mao_basis_set_list, orb_basis_set_list, smo_list)
+
+      ! get reference density matrix and overlap matrix
+      IF (PRESENT(pmat_external)) THEN
+         matrix_p => pmat_external
+      ELSE
+         CALL get_qs_env(qs_env, rho=rho)
+         CALL qs_rho_get(rho, rho_ao_kp=matrix_p)
+      END IF
+      IF (PRESENT(smat_external)) THEN
+         matrix_s => smat_external
+      ELSE
+         CALL get_qs_env(qs_env, matrix_s_kp=matrix_s)
+      END IF
+
+      nspin = SIZE(matrix_p, 1)
+      eps_filter = 0.0_dp
+      ! Q matrix
+      CALL mao_build_q(matrix_q, matrix_p, matrix_s, matrix_smm, matrix_smo, smm_list, electra, eps_filter)
+
+      ! MAO matrices
+      CALL get_qs_env(qs_env=qs_env, natom=natom)
+      CALL get_ks_env(ks_env=ks_env, particle_set=particle_set, dbcsr_dist=dbcsr_dist)
+      NULLIFY (mao_coef)
+      CALL cp_dbcsr_allocate_matrix_set(mao_coef, nspin)
+      ALLOCATE (row_blk_sizes(natom), col_blk_sizes(natom))
+      CALL get_particle_set(particle_set, qs_kind_set, nsgf=row_blk_sizes, &
+                            basis=mao_basis_set_list)
+      CALL get_particle_set(particle_set, qs_kind_set, nmao=col_blk_sizes)
+      ! check if MAOs have been specified
+      DO iab = 1, natom
+         IF (col_blk_sizes(iab) < 0) &
+            CPABORT("Number of MAOs has to be specified in KIND section for all elements")
+      END DO
+      DO ispin = 1, nspin
+         ! coeficients
+         ALLOCATE (mao_coef(ispin)%matrix)
+         CALL cp_dbcsr_init(mao_coef(ispin)%matrix)
+         CALL cp_dbcsr_create(matrix=mao_coef(ispin)%matrix, &
+                              name="MAO_COEF", dist=dbcsr_dist, matrix_type=dbcsr_type_no_symmetry, &
+                              row_blk_size=row_blk_sizes, col_blk_size=col_blk_sizes, nze=0)
+         CALL cp_dbcsr_reserve_diag_blocks(matrix=mao_coef(ispin)%matrix)
+      END DO
+      DEALLOCATE (row_blk_sizes, col_blk_sizes)
+
+      ! initialize MAO coeficients from diagonal blocks of the Q matrix
+      DO ispin = 1, nspin
+         CALL mao_initialization(mao_coef(ispin)%matrix, &
+                                 matrix_q(ispin)%matrix, matrix_smm(1)%matrix)
+      END DO
+
+      CALL cp_dbcsr_get_info(mao_coef(1)%matrix, col_blk_size=col_blk_sizes, distribution=dbcsr_dist)
+      CALL cp_dbcsr_init(tmat)
+      CALL cp_dbcsr_create(tmat, name="Binv", dist=dbcsr_dist, matrix_type=dbcsr_type_symmetric, &
+                           row_blk_size=col_blk_sizes, col_blk_size=col_blk_sizes, nze=0)
+      DO ispin = 1, nspin
+         CALL mao_function(mao_coef(ispin)%matrix, fval, matrix_q(ispin)%matrix, &
+                           matrix_smm(1)%matrix, tmat, .FALSE.)
+         IF (unit_nr > 0) THEN
+            WRITE (UNIT=unit_nr, FMT="(T2,A,T31,A,I2,T57,A,F12.8)") &
+               "MAO Projection", "Spin:", ispin, "Completness:", fval/electra(ispin)
+         END IF
+      END DO
+      CALL cp_dbcsr_release(tmat)
+
+      ! Deallocate the neighbor list structure
+      IF (ASSOCIATED(smm_list)) THEN
+         DO iab = 1, SIZE(smm_list)
+            CALL deallocate_neighbor_list_set(smm_list(iab)%neighbor_list_set)
+         END DO
+         DEALLOCATE (smm_list)
+      END IF
+      IF (ASSOCIATED(smo_list)) THEN
+         DO iab = 1, SIZE(smo_list)
+            CALL deallocate_neighbor_list_set(smo_list(iab)%neighbor_list_set)
+         END DO
+         DEALLOCATE (smo_list)
+      END IF
+
+      DEALLOCATE (mao_basis_set_list, orb_basis_set_list)
+
+      IF (ASSOCIATED(matrix_smm)) CALL cp_dbcsr_deallocate_matrix_set(matrix_smm)
+      IF (ASSOCIATED(matrix_smo)) CALL cp_dbcsr_deallocate_matrix_set(matrix_smo)
+      IF (ASSOCIATED(matrix_q)) CALL cp_dbcsr_deallocate_matrix_set(matrix_q)
+
+      CALL timestop(handle)
+
+   END SUBROUTINE mao_basis_simple
+
+! **************************************************************************************************
+!> \brief ...
 !> \param mao_coef ...
 !> \param pmat ...
 !> \param smat ...
@@ -1588,5 +1714,122 @@ CONTAINS
          DEALLOCATE (cmask, weight, vec1, vec2)
       END DO
    END SUBROUTINE mao_basis_analysis
+
+! **************************************************************************************************
+!> \brief Calculte the Q=APA(T) matrix, A=(MAO,ORB) overlap
+!> \param matrix_q ...
+!> \param matrix_p ...
+!> \param matrix_s ...
+!> \param matrix_smm ...
+!> \param matrix_smo ...
+!> \param smm_list ...
+!> \param electra ...
+!> \param eps_filter ...
+!> \param nimages ...
+!> \param kpoints ...
+!> \param matrix_ks ...
+!> \param sab_orb ...
+!> \par History
+!>      08.2016 created [JGH]
+! **************************************************************************************************
+   SUBROUTINE mao_build_q(matrix_q, matrix_p, matrix_s, matrix_smm, matrix_smo, smm_list, &
+                          electra, eps_filter, nimages, kpoints, matrix_ks, sab_orb)
+
+      TYPE(cp_dbcsr_p_type), DIMENSION(:), POINTER       :: matrix_q
+      TYPE(cp_dbcsr_p_type), DIMENSION(:, :), POINTER    :: matrix_p, matrix_s
+      TYPE(cp_dbcsr_p_type), DIMENSION(:), POINTER       :: matrix_smm, matrix_smo
+      TYPE(neighbor_list_set_p_type), DIMENSION(:), &
+         POINTER                                         :: smm_list
+      REAL(KIND=dp), DIMENSION(2), INTENT(OUT)           :: electra
+      REAL(KIND=dp), INTENT(IN)                          :: eps_filter
+      INTEGER, INTENT(IN), OPTIONAL                      :: nimages
+      TYPE(kpoint_type), OPTIONAL, POINTER               :: kpoints
+      TYPE(cp_dbcsr_p_type), DIMENSION(:, :), OPTIONAL, &
+         POINTER                                         :: matrix_ks
+      TYPE(neighbor_list_set_p_type), DIMENSION(:), &
+         OPTIONAL, POINTER                               :: sab_orb
+
+      CHARACTER(len=*), PARAMETER :: routineN = 'mao_build_q', routineP = moduleN//':'//routineN
+
+      INTEGER                                            :: im, ispin, nim, nocc, norb, nspin
+      INTEGER, DIMENSION(:, :, :), POINTER               :: cell_to_index
+      REAL(KIND=dp)                                      :: elex, xkp(3)
+      TYPE(cp_dbcsr_type)                                :: ksmat, pmat, smat, tmat
+
+      nim = 1
+      IF (PRESENT(nimages)) nim = nimages
+      IF (nim > 1) THEN
+         CPASSERT(PRESENT(kpoints))
+         CPASSERT(PRESENT(matrix_ks))
+         CPASSERT(PRESENT(sab_orb))
+      END IF
+
+      ! Reference
+      nspin = SIZE(matrix_p, 1)
+      DO ispin = 1, nspin
+         electra(ispin) = 0.0_dp
+         DO im = 1, nim
+            CALL cp_dbcsr_trace(matrix_p(ispin, im)%matrix, matrix_s(1, im)%matrix, elex)
+            electra(ispin) = electra(ispin)+elex
+         END DO
+      END DO
+
+      ! Q matrix
+      NULLIFY (matrix_q)
+      CALL cp_dbcsr_allocate_matrix_set(matrix_q, nspin)
+      DO ispin = 1, nspin
+         ALLOCATE (matrix_q(ispin)%matrix)
+         CALL cp_dbcsr_init(matrix_q(ispin)%matrix)
+         CALL cp_dbcsr_create(matrix_q(ispin)%matrix, template=matrix_smm(1)%matrix)
+         CALL cp_dbcsr_alloc_block_from_nbl(matrix_q(ispin)%matrix, smm_list)
+      END DO
+      ! temp matrix
+      CALL cp_dbcsr_init(tmat)
+      CALL cp_dbcsr_create(tmat, template=matrix_smo(1)%matrix, matrix_type=dbcsr_type_no_symmetry)
+      ! Q=APA(T)
+      DO ispin = 1, nspin
+         IF (nim == 1) THEN
+            CALL cp_dbcsr_multiply("N", "N", 1.0_dp, matrix_smo(1)%matrix, matrix_p(ispin, 1)%matrix, &
+                                   0.0_dp, tmat, filter_eps=eps_filter)
+            CALL cp_dbcsr_multiply("N", "T", 1.0_dp, tmat, matrix_smo(1)%matrix, &
+                                   0.0_dp, matrix_q(ispin)%matrix, filter_eps=eps_filter)
+         ELSE
+            ! k-points
+            CALL cp_dbcsr_init(pmat)
+            CALL cp_dbcsr_create(pmat, template=matrix_s(1, 1)%matrix)
+            CALL cp_dbcsr_init(smat)
+            CALL cp_dbcsr_create(smat, template=matrix_s(1, 1)%matrix)
+            CALL cp_dbcsr_init(ksmat)
+            CALL cp_dbcsr_create(ksmat, template=matrix_s(1, 1)%matrix)
+            CALL cp_dbcsr_alloc_block_from_nbl(pmat, sab_orb)
+            CALL cp_dbcsr_alloc_block_from_nbl(smat, sab_orb)
+            CALL cp_dbcsr_alloc_block_from_nbl(ksmat, sab_orb)
+            NULLIFY (cell_to_index)
+            CALL get_kpoint_info(kpoint=kpoints, cell_to_index=cell_to_index)
+            ! calculate density matrix at gamma point
+            xkp = 0.0_dp
+            ! transform KS and S matrices to the gamma point
+            CALL cp_dbcsr_set(ksmat, 0.0_dp)
+            CALL rskp_transform(rmatrix=ksmat, rsmat=matrix_ks, ispin=ispin, &
+                                xkp=xkp, cell_to_index=cell_to_index, sab_nl=sab_orb)
+            CALL cp_dbcsr_set(smat, 0.0_dp)
+            CALL rskp_transform(rmatrix=smat, rsmat=matrix_s, ispin=1, &
+                                xkp=xkp, cell_to_index=cell_to_index, sab_nl=sab_orb)
+            norb = NINT(electra(ispin))
+            nocc = MOD(2, nspin)+1
+            CALL calculate_p_gamma(pmat, ksmat, smat, kpoints, norb, REAL(nocc, KIND=dp))
+            CALL cp_dbcsr_multiply("N", "N", 1.0_dp, matrix_smo(1)%matrix, pmat, &
+                                   0.0_dp, tmat, filter_eps=eps_filter)
+            CALL cp_dbcsr_multiply("N", "T", 1.0_dp, tmat, matrix_smo(1)%matrix, &
+                                   0.0_dp, matrix_q(ispin)%matrix, filter_eps=eps_filter)
+            CALL cp_dbcsr_release(pmat)
+            CALL cp_dbcsr_release(smat)
+            CALL cp_dbcsr_release(ksmat)
+         END IF
+      END DO
+      ! free temp matrix
+      CALL cp_dbcsr_release(tmat)
+
+   END SUBROUTINE mao_build_q
 
 END MODULE mao_methods
