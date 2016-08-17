@@ -147,6 +147,8 @@ MODULE lri_environment_types
       REAL(KIND=dp), DIMENSION(:, :), POINTER                 :: ri_ovlp
       ! self overlap orb basis
       REAL(KIND=dp), DIMENSION(:, :), POINTER                 :: orb_ovlp
+      REAL(KIND=dp), DIMENSION(:, :, :), POINTER              :: ovlp3
+      ! contraction matrix for SHG integrals ri basis
       ! contraction matrix for SHG integrals ri basis
       REAL(KIND=dp), DIMENSION(:, :, :), POINTER              :: scon_ri
       ! contraction matrix for SHG integrals orb basis
@@ -227,8 +229,6 @@ MODULE lri_environment_types
       REAL(KIND=dp), DIMENSION(:, :), POINTER                   :: dtvec
       ! derivative davec/dR
       REAL(KIND=dp), DIMENSION(:, :), POINTER                   :: davec
-      ! derivative overlap matrix dS/dR
-      REAL(KIND=dp), DIMENSION(:, :, :), POINTER                 :: ds
    END TYPE lri_force_type
 
 ! **************************************************************************************************
@@ -798,8 +798,6 @@ CONTAINS
       IF (.NOT. ASSOCIATED(lri_force)) THEN
          ALLOCATE (lri_force)
 
-         ALLOCATE (lri_force%ds(nn, nn, 3))
-         lri_force%ds = 0._dp
          ALLOCATE (lri_force%st(nn))
          lri_force%st = 0._dp
          ALLOCATE (lri_force%dsst(nn, 3))
@@ -839,6 +837,7 @@ CONTAINS
             DEALLOCATE (lri_env%bas_prop(i)%int_fbas)
             DEALLOCATE (lri_env%bas_prop(i)%ri_ovlp)
             DEALLOCATE (lri_env%bas_prop(i)%orb_ovlp)
+            DEALLOCATE (lri_env%bas_prop(i)%ovlp3)
             DEALLOCATE (lri_env%bas_prop(i)%scon_ri)
             DEALLOCATE (lri_env%bas_prop(i)%scon_orb)
             DEALLOCATE (lri_env%bas_prop(i)%orb_index)
@@ -1068,9 +1067,6 @@ CONTAINS
          ENDIF
          IF (ASSOCIATED(lri_force%davec)) THEN
             DEALLOCATE (lri_force%davec)
-         ENDIF
-         IF (ASSOCIATED(lri_force%ds)) THEN
-            DEALLOCATE (lri_force%ds)
          ENDIF
 
          DEALLOCATE (lri_force)
