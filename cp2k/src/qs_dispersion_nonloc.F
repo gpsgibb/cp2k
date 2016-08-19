@@ -632,9 +632,9 @@ CONTAINS
                                                             dq_6, e, f, P, prefactor, tmp_1_2, &
                                                             tmp_1_4, tmp_3_4
       REAL(dp), ALLOCATABLE, DIMENSION(:)                :: y
+      REAL(dp), DIMENSION(3, 3)                          :: virial_thread
       REAL(dp), DIMENSION(:), POINTER                    :: q_mesh
       REAL(dp), DIMENSION(:, :), POINTER                 :: d2y_dx2
-      REAL(KIND=dp), DIMENSION(3, 3)                     :: virial_thread
 
       CALL timeset(routineN, handle)
 
@@ -763,10 +763,65 @@ CONTAINS
       CALL timestop(handle)
    END SUBROUTINE get_potential
 
+! **************************************************************************************************
+!> \brief calculates exponent = sum(from i=1 to hi, ((alpha)**i)/i) ) without <<< calling power >>>
+!> \param hi = upper index for sum
+!> \param alpha ...
+!> \param exponent = output value
+!> \par History
+!>     Created:  MTucker, Aug 2016
+! **************************************************************************************************
+   SUBROUTINE calculate_exponent(hi, alpha, exponent)
+      INTEGER, INTENT(in)                                :: hi
+      REAL(dp), INTENT(in)                               :: alpha
+      REAL(dp), INTENT(out)                              :: exponent
+
+      INTEGER                                            :: i
+      REAL(dp)                                           :: multiplier
+
+      multiplier = alpha
+      exponent = alpha
+
+      DO i = 2, hi
+         multiplier = multiplier*alpha
+         exponent = exponent+(multiplier/i)
+      END DO
+   END SUBROUTINE calculate_exponent
+
+! **************************************************************************************************
+!> \brief calculate exponent = sum(from i=1 to hi, ((alpha)**i)/i) )  without calling power
+!>        also calculates derivative using similar series
+!> \param hi = upper index for sum
+!> \param alpha ...
+!> \param exponent = output value
+!> \param derivative ...
+!> \par History
+!>     Created:  MTucker, Aug 2016
+! **************************************************************************************************
+   SUBROUTINE calculate_exponent_derivative(hi, alpha, exponent, derivative)
+      INTEGER, INTENT(in)                                :: hi
+      REAL(dp), INTENT(in)                               :: alpha
+      REAL(dp), INTENT(out)                              :: exponent, derivative
+
+      INTEGER                                            :: i
+      REAL(dp)                                           :: multiplier
+
+      derivative = 0.0d0
+      multiplier = 1.0d0
+      exponent = 0.0d0
+
+      DO i = 1, hi
+         derivative = derivative+multiplier
+         multiplier = multiplier*alpha
+         exponent = exponent+(multiplier/i)
+      END DO
+   END SUBROUTINE calculate_exponent_derivative
+
    !! This routine first calculates the q value defined in (DION equations 11 and 12), then
    !! saturates it according to (SOLER equation 5).
 ! **************************************************************************************************
-!> \brief ...
+!> \brief This routine first calculates the q value defined in (DION equations 11 and 12), then
+!> saturates it according to (SOLER equation 5).
 !> \param total_rho ...
 !> \param gradient_rho ...
 !> \param q0 ...
@@ -792,10 +847,10 @@ CONTAINS
       REAL(dp), PARAMETER :: LDA_A = 0.031091_dp, LDA_a1 = 0.2137_dp, LDA_b1 = 7.5957_dp, &
          LDA_b2 = 3.5876_dp, LDA_b3 = 1.6382_dp, LDA_b4 = 0.49294_dp
 
-      INTEGER                                            :: i_grid, index
+      INTEGER                                            :: i_grid
       REAL(dp)                                           :: dq0_dq, exponent, gradient_correction, &
-                                                            kF, LDA_1, LDA_2, q, q_cut, q_min, &
-                                                            r_s, sqrt_r_s, Z_ab
+                                                            kF, LDA_1, LDA_2, q, q__q_cut, q_cut, &
+                                                            q_min, r_s, sqrt_r_s, Z_ab
 
       q_cut = dispersion_env%q_cut
       q_min = dispersion_env%q_min
@@ -842,12 +897,8 @@ CONTAINS
          !! Here, we calculate q0 by saturating q according to equation 5 of SOLER.  Also, we find
          !! the derivative dq0_dq needed for the derivatives dq0_drho and dq0_dgradrh0 discussed below.
          !! ---------------------------------------------------------------------------------------
-         exponent = 0.0_dp
-         dq0_dq = 0.0_dp
-         DO index = 1, m_cut
-            exponent = exponent+((q/q_cut)**index)/index
-            dq0_dq = dq0_dq+((q/q_cut)**(index-1))
-         END DO
+         q__q_cut = q/q_cut
+         CALL calculate_exponent_derivative(m_cut, q__q_cut, exponent, dq0_dq)
          q0(i_grid) = q_cut*(1.0_dp-EXP(-exponent))
          dq0_dq = dq0_dq*EXP(-exponent)
          !! ---------------------------------------------------------------------------------------
@@ -904,10 +955,10 @@ CONTAINS
 
       INTEGER, PARAMETER                                 :: m_cut = 12
 
-      INTEGER                                            :: i_grid, index
+      INTEGER                                            :: i_grid
       REAL(dp)                                           :: b_value, C_value, dk_dn, dq0_dq, dw0_dn, &
                                                             exponent, gmod2, k, mod_grad, q, &
-                                                            q_cut, q_min, w0, wg2, wp2
+                                                            q__q_cut, q_cut, q_min, w0, wg2, wp2
 
       q_cut = dispersion_env%q_cut
       q_min = dispersion_env%q_min
@@ -940,34 +991,22 @@ CONTAINS
 
             !! Here, we calculate q0 by saturating q according
             !! ---------------------------------------------------------------------------------------
-
-            exponent = 0.0_dp
-            dq0_dq = 0.0_dp
-
-            DO index = 1, m_cut
-
-               exponent = exponent+((q/q_cut)**index)/index
-               dq0_dq = dq0_dq+((q/q_cut)**(index-1))
-
-            END DO
-
+            q__q_cut = q/q_cut
+            CALL calculate_exponent_derivative(m_cut, q__q_cut, exponent, dq0_dq)
             q0(i_grid) = q_cut*(1.0_dp-EXP(-exponent))
             dq0_dq = dq0_dq*EXP(-exponent)
 
             !! ---------------------------------------------------------------------------------------
-
             IF (q0(i_grid) < q_min) THEN
                q0(i_grid) = q_min
             END IF
 
             !!---------------------------------Final values---------------------------------
-
             dw0_dn = 1.0_dp/(2.0_dp*w0)*(16.0_dp/3.0_dp*pi-4.0_dp*wg2/total_rho(i_grid))
             dk_dn = k/(6.0_dp*total_rho(i_grid))
 
             dq0_drho(i_grid) = dq0_dq*1.0_dp/(k**2.0)*(dw0_dn*k-dk_dn*w0)
-            dq0_dgradrho(i_grid) = dq0_dq*1.0_dp/(2.0_dp*k*w0)*4.0_dp*wg2/(mod_grad**2)
-
+            dq0_dgradrho(i_grid) = dq0_dq*1.0_dp/(2.0_dp*k*w0)*4.0_dp*wg2/gmod2
          ENDIF
 
       END DO
@@ -993,10 +1032,10 @@ CONTAINS
       REAL(dp), PARAMETER :: LDA_A = 0.031091_dp, LDA_a1 = 0.2137_dp, LDA_b1 = 7.5957_dp, &
          LDA_b2 = 3.5876_dp, LDA_b3 = 1.6382_dp, LDA_b4 = 0.49294_dp
 
-      INTEGER                                            :: i_grid, index
+      INTEGER                                            :: i_grid
       REAL(dp)                                           :: exponent, gradient_correction, kF, &
-                                                            LDA_1, LDA_2, q, q_cut, q_min, r_s, &
-                                                            sqrt_r_s, Z_ab
+                                                            LDA_1, LDA_2, q, q__q_cut, q_cut, &
+                                                            q_min, r_s, sqrt_r_s, Z_ab
 
       q_cut = dispersion_env%q_cut
       q_min = dispersion_env%q_min
@@ -1034,18 +1073,16 @@ CONTAINS
          !! ------------------------------------------------------------------------------------
          !! This is the q value defined in equations 11 and 12 of DION
          !! ---------------------------------------------------------------
-
          q = kF+LDA_1*LOG(1.0_dp+1.0_dp/LDA_2)+gradient_correction
 
          !! ---------------------------------------------------------------
          !! Here, we calculate q0 by saturating q according to equation 5 of SOLER.  Also, we find
          !! the derivative dq0_dq needed for the derivatives dq0_drho and dq0_dgradrh0 discussed below.
          !! ---------------------------------------------------------------------------------------
-         exponent = 0.0_dp
-         DO index = 1, m_cut
-            exponent = exponent+((q/q_cut)**index)/index
-         END DO
+         q__q_cut = q/q_cut
+         CALL calculate_exponent(m_cut, q__q_cut, exponent)
          q0(i_grid) = q_cut*(1.0_dp-EXP(-exponent))
+
          !! ---------------------------------------------------------------------------------------
          !! This is to handle a case with q0 too small.  We simply set it to the smallest q value in
          !! out q_mesh.  Hopefully this doesn't get used often (ever)
@@ -1072,9 +1109,9 @@ CONTAINS
 
       INTEGER, PARAMETER                                 :: m_cut = 12
 
-      INTEGER                                            :: i_grid, index
-      REAL(dp)                                           :: b_value, C_value, exponent, gmod2, k, &
-                                                            mod_grad, q, q_cut, q_min, w0, wg2, wp2
+      INTEGER                                            :: i_grid
+      REAL(dp)                                           :: b_value, C_value, exponent, gmod2, k, q, &
+                                                            q__q_cut, q_cut, q_min, w0, wg2, wp2
 
       q_cut = dispersion_env%q_cut
       q_min = dispersion_env%q_min
@@ -1093,10 +1130,8 @@ CONTAINS
 
             !! Calculate some intermediate values needed to find q
             !! ------------------------------------------------------------------------------------
-            mod_grad = SQRT(gmod2)
-
             wp2 = 16.0_dp*pi*total_rho(i_grid)
-            wg2 = 4_dp*C_value*(mod_grad/total_rho(i_grid))**4
+            wg2 = 4_dp*C_value*(gmod2*gmod2)/(total_rho(i_grid)**4)
 
             k = b_value*3.0_dp*pi*((total_rho(i_grid)/(9.0_dp*pi))**(1.0_dp/6.0_dp))
             w0 = SQRT(wg2+wp2/3.0_dp)
@@ -1105,15 +1140,8 @@ CONTAINS
 
             !! Here, we calculate q0 by saturating q according
             !! ---------------------------------------------------------------------------------------
-
-            exponent = 0.0_dp
-
-            DO index = 1, m_cut
-
-               exponent = exponent+((q/q_cut)**index)/index
-
-            END DO
-
+            q__q_cut = q/q_cut
+            CALL calculate_exponent(m_cut, q__q_cut, exponent)
             q0(i_grid) = q_cut*(1.0_dp-EXP(-exponent))
 
             IF (q0(i_grid) < q_min) THEN
@@ -1126,33 +1154,41 @@ CONTAINS
 
    END SUBROUTINE get_q0_on_grid_eo_rvv10
 
-   !! This routine is modeled after an algorithm from "Numerical Recipes in C" by Cambridge University
-   !! press, page 97.  It was adapted for Fortran, of course and for the problem at hand, in that it finds
-   !! the bin a particular x value is in and then loops over all the P_i functions so we only have to find
-   !! the bin once.
 ! **************************************************************************************************
-!> \brief ...
+!> \brief This routine is modeled after an algorithm from "Numerical Recipes in C" by Cambridge University
+!> press, page 97.  It was adapted for Fortran, of course and for the problem at hand, in that it finds
+!> the bin a particular x value is in and then loops over all the P_i functions so we only have to find
+!> the bin once.
 !> \param x ...
 !> \param d2y_dx2 ...
 !> \param evaluation_points ...
 !> \param values ...
+!> \par History
+!>     OpenMP added: Aug 2016  MTucker
 ! **************************************************************************************************
    SUBROUTINE spline_interpolation(x, d2y_dx2, evaluation_points, values)
-
       REAL(dp), INTENT(in)                               :: x(:), d2y_dx2(:, :), evaluation_points(:)
-      REAL(dp), INTENT(inout)                            :: values(:, :)
+      REAL(dp), INTENT(out)                              :: values(:, :)
 
       INTEGER                                            :: i_grid, index, lower_bound, &
                                                             Ngrid_points, Nx, P_i, upper_bound
-      REAL(dp)                                           :: a, b, c, d, dx
+      REAL(dp)                                           :: a, b, c, const, d, dx
       REAL(dp), ALLOCATABLE                              :: y(:)
 
       Nx = SIZE(x)
       Ngrid_points = SIZE(evaluation_points)
 
-      !! Allocate the temporary array
+!$OMP PARALLEL DEFAULT( NONE )                                         &
+!$OMP           SHARED( x, d2y_dx2, evaluation_points, values          &
+!$OMP                 , Nx, Ngrid_points                               &
+!$OMP                 )                                                &
+!$OMP          PRIVATE( y, lower_bound, upper_bound, index             &
+!$OMP                 , dx, const, A, b, c, d, P_i                     &
+!$OMP                 )
+
       ALLOCATE (y(Nx))
 
+!$OMP DO
       DO i_grid = 1, Ngrid_points
          lower_bound = 1
          upper_bound = Nx
@@ -1166,11 +1202,12 @@ CONTAINS
          END DO
 
          dx = x(upper_bound)-x(lower_bound)
+         const = dx*dx/6.0_dp
 
          a = (x(upper_bound)-evaluation_points(i_grid))/dx
          b = (evaluation_points(i_grid)-x(lower_bound))/dx
-         c = ((a**3-a)*dx**2)/6.0_dp
-         d = ((b**3-b)*dx**2)/6.0_dp
+         c = (a**3-a)*const
+         d = (b**3-b)*const
 
          DO P_i = 1, Nx
             y = 0
@@ -1179,17 +1216,19 @@ CONTAINS
                                   +(c*d2y_dx2(P_i, lower_bound)+d*d2y_dx2(P_i, upper_bound))
          END DO
       END DO
+!$OMP END DO
 
       DEALLOCATE (y)
-
+!$OMP END PARALLEL
    END SUBROUTINE spline_interpolation
 
-   !! This routine is modeled after an algorithm from "Numerical Recipes in C" by Cambridge
-   !! University Press, pages 96-97.  It was adapted for Fortran and for the problem at hand.
 ! **************************************************************************************************
-!> \brief ...
+!> \brief This routine is modeled after an algorithm from "Numerical Recipes in C" by Cambridge
+!> University Press, pages 96-97.  It was adapted for Fortran and for the problem at hand.
 !> \param x ...
 !> \param d2y_dx2 ...
+!> \par History
+!>     OpenMP added: Aug 2016  MTucker
 ! **************************************************************************************************
    SUBROUTINE initialize_spline_interpolation(x, d2y_dx2)
 
@@ -1201,10 +1240,18 @@ CONTAINS
       REAL(dp), ALLOCATABLE                              :: temp_array(:), y(:)
 
       Nx = SIZE(x)
+
+!$OMP PARALLEL DEFAULT( NONE )                  &
+!$OMP           SHARED( x, d2y_dx2, Nx )        &
+!$OMP          PRIVATE( temp_array, y           &
+!$OMP                 , index, temp1, temp2     &
+!$OMP                 )
+
       ALLOCATE (temp_array(Nx), y(Nx))
 
+!$OMP DO
       DO P_i = 1, Nx
-         !! In the Soler method, the polynomicals that are interpolated are Kronecker delta funcions
+         !! In the Soler method, the polynomials that are interpolated are Kronecker delta funcions
          !! at a particular q point.  So, we set all y values to 0 except the one corresponding to
          !! the particular function P_i.
          !! ----------------------------------------------------------------------------------------
@@ -1228,8 +1275,10 @@ CONTAINS
             d2y_dx2(P_i, index) = d2y_dx2(P_i, index)*d2y_dx2(P_i, index+1)+temp_array(index)
          END DO
       END DO
+!$OMP END DO
 
       DEALLOCATE (temp_array, y)
+!$OMP END PARALLEL
 
    END SUBROUTINE initialize_spline_interpolation
 
