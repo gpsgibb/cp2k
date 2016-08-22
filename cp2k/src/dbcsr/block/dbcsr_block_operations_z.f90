@@ -369,12 +369,12 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
-    IF (CP_VERSION4(1, 4, 3, 88).LE.CP_VERSION4( &
+    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
-        CALL libxsmm_transpose_oop(C_LOC(extent_out), C_LOC(extent_in), &
-                                   16, rows, columns, rows, columns)
+        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                            16, rows, columns, rows, columns)
     ELSE
 #endif
 #if defined(__MKL)
@@ -473,12 +473,12 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
-    IF (CP_VERSION4(1, 4, 3, 88).LE.CP_VERSION4( &
+    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
-        CALL libxsmm_transpose_oop(C_LOC(extent_out), C_LOC(extent_in), &
-                                   16, rows, columns, rows, columns)
+        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                            16, rows, columns, rows, columns)
     ELSE
 #endif
 #if defined(__MKL)
@@ -534,12 +534,12 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
-    IF (CP_VERSION4(1, 4, 3, 88).LE.CP_VERSION4( &
+    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
-        CALL libxsmm_transpose_oop(C_LOC(extent_out), C_LOC(extent_in), &
-                                   16, rows, columns, rows, columns)
+        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                            16, rows, columns, rows, columns)
     ELSE
 #endif
 #if defined(__MKL)
