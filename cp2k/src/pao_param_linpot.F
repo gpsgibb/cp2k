@@ -19,6 +19,7 @@ MODULE pao_param_linpot
         dbcsr_distribution_mp, dbcsr_mp_group
    USE cp_para_types,                   ONLY: cp_para_env_type
    USE kinds,                           ONLY: dp
+   USE machine,                         ONLY: m_flush
    USE mathlib,                         ONLY: diamat_all
    USE message_passing,                 ONLY: mp_min,&
                                               mp_sum,&
@@ -466,14 +467,19 @@ CONTAINS
       IF (.NOT. PRESENT(forces)) THEN
          ! print eigenvalues from fock-layer
          CALL mp_sum(evals, group)
-         DO iatom = 1, natoms
-            IF (pao%iw_fockev > 0) WRITE (pao%iw_fockev, *) "PAO| atom:", iatom, " fock evals around gap:", evals(:, iatom)
-         ENDDO
+         IF (pao%iw_fockev > 0) THEN
+            DO iatom = 1, natoms
+               WRITE (pao%iw_fockev, *) "PAO| atom:", iatom, " fock evals around gap:", evals(:, iatom)
+            ENDDO
+            CALL m_flush(pao%iw_fockev)
+         ENDIF
          ! print homo-lumo gap encountered by fock-layer
          CALL mp_min(gaps, group)
-         DO iatom = 1, natoms
-            IF (pao%iw_gap > 0) WRITE (pao%iw_gap, *) "PAO| atom:", iatom, " fock gap:", gaps(iatom)
-         ENDDO
+         IF (pao%iw_gap > 0) THEN
+            DO iatom = 1, natoms
+               WRITE (pao%iw_gap, *) "PAO| atom:", iatom, " fock gap:", gaps(iatom)
+            ENDDO
+         ENDIF
          ! one-line summaries
          IF (pao%iw > 0) WRITE (pao%iw, *) "PAO| linpot regularization energy:", regu_energy
          IF (pao%iw > 0) WRITE (pao%iw, "(A,E20.10,A,T71,I10)") " PAO| min_gap:", MINVAL(gaps), " for atom:", MINLOC(gaps)

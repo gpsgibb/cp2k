@@ -23,6 +23,7 @@ MODULE pao_ml
    USE kinds,                           ONLY: default_path_length,&
                                               default_string_length,&
                                               dp
+   USE machine,                         ONLY: m_flush
    USE message_passing,                 ONLY: mp_bcast,&
                                               mp_sum
    USE pao_input,                       ONLY: id2str,&
@@ -445,6 +446,7 @@ CONTAINS
                   " out:", training_matrix%outputs(:, i)
             ENDDO
          ENDDO
+         CALL m_flush(pao%iw_mldata)
       ENDIF
 
       ! print stats
@@ -563,6 +565,7 @@ CONTAINS
          DO iatom = 1, natoms
             WRITE (pao%iw_mlvar, *) "PAO|ML| atom:", iatom, " prediction variance:", variances(iatom)
          ENDDO
+         CALL m_flush(pao%iw_mlvar)
       ENDIF
 
       ! one-line summary
