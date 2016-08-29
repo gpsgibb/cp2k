@@ -960,7 +960,7 @@ gen_arch_file() {
     if [ "$__CUDA" = "on" ] ; then
       cat <<EOF >> $__filename
 #
-NVCC        = \${NVCC} -D__GNUC_MINOR__=6 -D__GNUC__=4
+NVCC        = \${NVCC} -D__GNUC__=4 -D__GNUC_MINOR__=9 -Xcompiler=--std=gnu++98
 NVFLAGS     = \${NVFLAGS}
 EOF
     fi
@@ -992,6 +992,9 @@ rm -f ${INSTALLDIR}/arch/local*
 [ "$MPI_MODE" != no ] && \
 [ "$ENABLE_OMP" = __TRUE__ ] && \
     { gen_arch_file "local.psmp" MPI OMP;   arch_vers="${arch_vers} psmp"; }
+[ "$MPI_MODE" != no ] && \
+[ "$ENABLE_OMP" = __TRUE__ ] && \
+    gen_arch_file "local_warn.psmp" MPI OMP WARNALL
 # cuda enabled arch files
 if [ "$ENABLE_CUDA" = __TRUE__ ] ; then
     [ "$ENABLE_OMP" = __TRUE__ ] && \
