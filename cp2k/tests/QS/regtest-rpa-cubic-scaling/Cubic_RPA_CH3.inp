@@ -11,13 +11,15 @@
   &DFT
     BASIS_SET_FILE_NAME  HFX_BASIS
     POTENTIAL_FILE_NAME  GTH_POTENTIALS
+    UKS
+    MULTIPLICITY 2
     &MGRID
       CUTOFF  100
       REL_CUTOFF  20
     &END MGRID
     &POISSON
       PERIODIC NONE
-      POISSON_SOLVER WAVELET
+      POISSON_SOLVER MT
     &END POISSON
     &QS
       METHOD GPW
@@ -43,23 +45,14 @@
           OBARA_SAIKA_OVERLAP TRUE
           ! normally, this EPS_FILTER controls the accuracy and 
           ! the time for the cubic_scaling RPA calculation
-          EPS_FILTER  1.0E-6
+          EPS_FILTER  1.0E-4
+          EPS_GRID    1.0E-4
         &END
         ERI_METHOD MME
         &RI_RPA
           RPA_NUM_QUAD_POINTS  6
           MINIMAX
           IM_TIME
-          &IM_TIME
-            ! normally, increase MEMORY_CUT for large systems 
-            ! not to run out of memory
-            MEMORY_CUT 2
-            ! should be increased with N^2 (N: group size) not
-            ! to run OOM
-            GROUP_SIZE_3c 2
-            ! normally, GROUP_SIZE_P 1 is fine
-            GROUP_SIZE_P 2
-          &END IM_TIME
           &HF
             FRACTION 1.0000000
             &SCREENING
@@ -75,7 +68,7 @@
   &END DFT
   &SUBSYS
     &CELL
-      ABC [angstrom]  8.000   8.000  8.000
+      ABC [angstrom]  9.000   9.000  9.000
       PERIODIC NONE
     &END CELL
     &KIND H
@@ -83,13 +76,13 @@
       RI_AUX_BASIS_SET  RI_DZVP-GTH
       POTENTIAL  GTH-PBE-q1
     &END KIND
-    &KIND O
+    &KIND C
       BASIS_SET  DZVP-GTH
       RI_AUX_BASIS_SET  RI_DZVP-GTH
-      POTENTIAL  GTH-PBE-q6
+      POTENTIAL  GTH-PBE-q4
     &END KIND
     &TOPOLOGY
-      COORD_FILE_NAME  H2O_gas.xyz
+      COORD_FILE_NAME  CH3.xyz
       COORD_FILE_FORMAT xyz
       &CENTER_COORDINATES
       &END
