@@ -39,7 +39,8 @@
 import re
 import sys
 import os
-from formatting.normalizeFortranFile import useParseRe, typeRe, InputStream, CharFilter, ompRe, ompDirRe
+from formatting.normalizeFortranFile import USE_PARSE_RE, VAR_DECL_RE, InputStream, CharFilter, OMP_RE, OMP_DIR_RE
+import logging
 
 #=========================================================================
 # constants, mostly regular expressions
@@ -99,7 +100,7 @@ ENDINTERFACE_RE = re.compile(
 
 CONTAINS_RE = re.compile(SOL_STR + r"CONTAINS" + EOL_STR, RE_FLAGS)
 
-PUBLIC_RE = re.compile(SOL_STR + r"PUBLIC\s*::")
+PUBLIC_RE = re.compile(SOL_STR + r"PUBLIC\s*::", RE_FLAGS)
 
 # intrinsic statements with parenthesis notation that are not functions
 INTR_STMTS_PAR = "(ALLOCATE|DEALLOCATE|REWIND|BACKSPACE|INQUIRE|OPEN|CLOSE|WRITE|READ|FORALL|WHERE|NULLIFY)"
@@ -159,6 +160,7 @@ class F90Indenter(object):
         current Fortran line, and `rel_ind_con` for line continuation. By default line continuations are
         auto-aligned by F90Aligner - manual offsets can be set by manual_lines_indents.
         """
+        logger = logging.getLogger('prettify-logger')
 
         self._line_indents = [0] * len(lines)
         br_indent_list = [0] * len(lines)
@@ -171,17 +173,13 @@ class F90Indenter(object):
         is_new = False
         valid_new = False
 
-        debug = False
-
         for new_n, newre in enumerate(NEW_SCOPE_RE):
             if newre.search(f_line) and not END_SCOPE_RE[new_n].search(f_line):
                 what_new = new_n
                 is_new = True
                 valid_new = True
                 scopes.append(what_new)
-                if debug:
-                    sys.stderr.write(f_line + '\n')
-                break
+                logger.debug(f_line + '\n')
 
         # check statements that continue scope
         is_con = False
@@ -194,9 +192,7 @@ class F90Indenter(object):
                     what = scopes[-1]
                     if what == what_con:
                         valid_con = True
-                        if debug:
-                            sys.stderr.write(f_line + '\n')
-                        break
+                        logger.debug(f_line + '\n')
 
         # check statements that end scope
         is_end = False
@@ -209,9 +205,7 @@ class F90Indenter(object):
                     what = scopes.pop()
                     if what == what_end:
                         valid_end = True
-                        if debug:
-                            sys.stderr.write(f_line + '\n')
-                        break
+                        logger.debug(f_line + '\n')
 
         # deal with line breaks
         if not manual_lines_indent:
@@ -297,7 +291,7 @@ class F90Aligner(object):
 
         self.__init_line(line_nr)
 
-        is_decl = typeRe.match(f_line) or PUBLIC_RE.match(f_line)
+        is_decl = VAR_DECL_RE.match(f_line) or PUBLIC_RE.match(f_line)
         for pos, line in enumerate(lines):
             self.__align_line_continuations(
                 line, is_decl, rel_ind, self._line_nr + pos)
@@ -669,11 +663,11 @@ def format_single_fline(f_line, whitespace, linebreak_pos, ampersand_sep, filena
 #=========================================================================
 
 
-def reformat_ffile(infile, outfile, logFile=sys.stderr, indent_size=2, whitespace=2, orig_filename=None):
+def reformat_ffile(infile, outfile, indent_size=2, whitespace=2, orig_filename=None):
     """
     main method to be invoked for formatting a Fortran file.
     """
-    debug = False
+    logger = logging.getLogger('prettify-logger')
 
     # don't change original indentation if rel-indents set to 0
     adopt_indents = indent_size <= 0
@@ -683,14 +677,15 @@ def reformat_ffile(infile, outfile, logFile=sys.stderr, indent_size=2, whitespac
 
     indenter = F90Indenter(orig_filename)
 
+    infile.seek(0)
     req_indents, first_indent, is_f90 = inspect_ffile_format(
         infile, indent_size)
     infile.seek(0)
 
     if not is_f90:
-        logFile.write("*** " + orig_filename +
-                      ": formatter can not handle f77 constructs. ***\n")
-        outfile.write(infile.read())  # does not handle f77 constructs
+        logger.error(orig_filename +
+                     ": formatter can not handle f77 constructs.\n")
+        outfile.write(infile.read())
         return
 
     nfl = 0  # fortran line counter
@@ -741,21 +736,21 @@ def reformat_ffile(infile, outfile, logFile=sys.stderr, indent_size=2, whitespac
 
         is_omp_conditional = False
 
-        if ompRe.match(f_line) and not ompDirRe.match(f_line):
+        if OMP_RE.match(f_line) and not OMP_DIR_RE.match(f_line):
             # convert OMP-conditional fortran statements into normal fortran statements
             # but remember to convert them back
-            f_line = ompRe.sub('  ', f_line, count=1)
-            lines = [ompRe.sub('  ', l, count=1) for l in lines]
+            f_line = OMP_RE.sub('  ', f_line, count=1)
+            lines = [OMP_RE.sub('  ', l, count=1) for l in lines]
             is_omp_conditional = True
 
         is_empty = EMPTY_RE.search(f_line)  # blank line or comment only line
 
-        if useParseRe.match(f_line):
+        if USE_PARSE_RE.match(f_line):
             do_indent = False
-        elif ompDirRe.match(f_line):
+        elif OMP_DIR_RE.match(f_line):
             # move '!$OMP' to line start, otherwise don't format omp directives
             lines = ['!$OMP' + (len(l) - len(l.lstrip())) *
-                     ' ' + ompDirRe.sub('', l, count=1) for l in lines]
+                     ' ' + OMP_DIR_RE.sub('', l, count=1) for l in lines]
             do_indent = False
         elif lines[0].startswith('#'):  # preprocessor macros
             assert len(lines) == 1
@@ -875,15 +870,14 @@ def reformat_ffile(infile, outfile, logFile=sys.stderr, indent_size=2, whitespac
                 outfile.write('!$' * is_omp_conditional + ' ' *
                               (133 - 2 * is_omp_conditional -
                                len(line.lstrip(' '))) + line.lstrip(' '))
-                if not typeRe.match(f_line):
-                    logFile.write("*** " + orig_filename + ":" + str(stream.line_nr) +
-                                  ": auto indentation failed due to 132 chars limit, line should be splitted. ***\n")
+                if not VAR_DECL_RE.match(f_line):
+                    logger.warning(orig_filename + ":" + str(stream.line_nr) +
+                                   ": auto indentation failed due to 132 chars limit, line should be splitted.\n")
             else:
                 outfile.write(orig_line)
-                logFile.write("*** " + orig_filename + ":" + str(stream.line_nr) +
-                              (": auto indentation and whitespace formatting failed due to 132 chars limit, line should be splitted. ***\n"))
-            if debug:
-                sys.stderr.write(' ' * ind_use + line + '\n')
+                logger.warning(orig_filename + ":" + str(stream.line_nr) +
+                               (": auto indentation and whitespace formatting failed due to 132 chars limit, line should be splitted.\n"))
+            logger.debug(' ' * ind_use + line + '\n')
 
         # no indentation of semicolon separated lines
         if re.search(r";\s*$", f_line, RE_FLAGS):

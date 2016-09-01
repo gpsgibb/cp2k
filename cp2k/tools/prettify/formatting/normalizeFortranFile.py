@@ -3,28 +3,31 @@ import re
 import string
 from sys import argv
 from collections import deque
+import logging
+
 try:
     from cStringIO import StringIO
 except ImportError:
     from io import StringIO
 
-rUse = 0
-rVar = 0
-varRe = re.compile(r" *(?P<var>[a-zA-Z_0-9]+) *(?P<rest>(?:\((?P<param>(?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)\))? *(?:= *(?P<value>(:?[^\"',()]+|\((?:[^()\"']+|\([^()\"']*\)|\"[^\"]*\"|'[^']*')*\)|\"[^\"]*\"|'[^']*')+))?)? *(?:(?P<continue>,)|\n?) *", re.IGNORECASE)
-useParseRe = re.compile(
+R_USE = 0
+R_VAR = 0
+VAR_RE = re.compile(r" *(?P<var>[a-zA-Z_0-9]+) *(?P<rest>(?:\((?P<param>(?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)\))? *(?:= *(?P<value>(:?[^\"',()]+|\((?:[^()\"']+|\([^()\"']*\)|\"[^\"]*\"|'[^']*')*\)|\"[^\"]*\"|'[^']*')+))?)? *(?:(?P<continue>,)|\n?) *", re.IGNORECASE)
+USE_PARSE_RE = re.compile(
     r" *use +(?P<module>[a-zA-Z_][a-zA-Z_0-9]*)(?P<only> *, *only *:)? *(?P<imports>.*)$",
     flags=re.IGNORECASE)
 commonUsesRe = re.compile(
     "^#include *\"([^\"]*(cp_common_uses.f90|base_uses.f90))\"")
 localNameRe = re.compile(
     " *(?P<localName>[a-zA-Z_0-9]+)(?: *= *> *[a-zA-Z_0-9]+)? *$")
-typeRe = re.compile(r" *(?P<type>integer(?: *\* *[0-9]+)?|logical|character(?: *\* *[0-9]+)?|real(?: *\* *[0-9]+)?|complex(?: *\* *[0-9]+)?|type) *(?P<parameters>\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\))? *(?P<attributes>(?: *, *[a-zA-Z_0-9]+(?: *\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\))?)+)? *(?P<dpnt>::)?(?P<vars>[^\n]+)\n?", re.IGNORECASE)  # $
-indentSize = 2
-decllinelength = 100
-decloffset = 50
+VAR_DECL_RE = re.compile(
+    r" *(?P<type>integer(?: *\* *[0-9]+)?|logical|character(?: *\* *[0-9]+)?|real(?: *\* *[0-9]+)?|complex(?: *\* *[0-9]+)?|type) *(?P<parameters>\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\))? *(?P<attributes>(?: *, *[a-zA-Z_0-9]+(?: *\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\))?)+)? *(?P<dpnt>::)?(?P<vars>[^\n]+)\n?", re.IGNORECASE)  # $
+INDENT_SIZE = 2
+DECL_LINELENGTH = 100
+DECL_OFFSET = 50
 
-ompDirRe = re.compile(r"^\s*(!\$omp)", re.IGNORECASE)
-ompRe = re.compile(r"^\s*(!\$)", re.IGNORECASE)
+OMP_DIR_RE = re.compile(r"^\s*(!\$omp)", re.IGNORECASE)
+OMP_RE = re.compile(r"^\s*(!\$)", re.IGNORECASE)
 
 
 class CharFilter(object):
@@ -109,9 +112,9 @@ class InputStream(object):
                 # but remember to convert them back
                 is_omp_conditional = False
                 omp_indent = 0
-                if ompRe.match(line):
+                if OMP_RE.match(line):
                     omp_indent = len(line) - len(line.lstrip(' '))
-                    line = ompRe.sub('', line, count=1)
+                    line = OMP_RE.sub('', line, count=1)
                     is_omp_conditional = True
                 line_start = 0
                 for pos, char in CharFilter(enumerate(line)):
@@ -146,15 +149,15 @@ class InputStream(object):
                 comments.append(line)
                 break
             coreAtt = m.group("core")
-            if ompRe.match(coreAtt) and joinedLine.strip():
+            if OMP_RE.match(coreAtt) and joinedLine.strip():
                 # remove omp '!$' for line continuation
-                coreAtt = ompRe.sub('', coreAtt, count=1).lstrip()
+                coreAtt = OMP_RE.sub('', coreAtt, count=1).lstrip()
             joinedLine = joinedLine.rstrip("\n") + coreAtt
             if coreAtt and not coreAtt.isspace():
                 continuation = 0
             if m.group("continue"):
                 continuation = 1
-            if line.lstrip().startswith('!') and not ompRe.search(line):
+            if line.lstrip().startswith('!') and not OMP_RE.search(line):
                 comments.append(line.rstrip('\n'))
             elif m.group("comment"):
                 comments.append(m.group("comment"))
@@ -167,6 +170,8 @@ class InputStream(object):
 
 def parseRoutine(inFile):
     """Parses a routine"""
+    logger = logging.getLogger('prettify-logger')
+
     startRe = re.compile(
         r" *(?:recursive +|pure +|elemental +)*(?:subroutine|function)", re.IGNORECASE)
     endRe = re.compile(r" *end\s*(?:subroutine|function)", re.IGNORECASE)
@@ -217,11 +222,12 @@ def parseRoutine(inFile):
                 subF.close()
             except:
                 import traceback
-                sys.stderr.write(
+                logger.debug(
                     "error trying to follow include " + m.group('file') + '\n')
-                sys.stderr.write(
+                logger.debug(
                     "warning this might lead to the removal of used variables\n")
-                traceback.print_exc()
+                if logger.isEnabledFor(logging.DEBUG):
+                    traceback.print_exc()
     if jline:
         routine['begin'] = lines
         m = startRoutineRe.match(jline)
@@ -251,7 +257,7 @@ def parseRoutine(inFile):
                 routine['postDeclComments'] = []
 
             if typeBeginRe.match(jline):
-                m = typeRe.match(jline)
+                m = VAR_DECL_RE.match(jline)
                 if (m.group('type').lower() == 'type' and
                         not m.group('parameters')):
                     break
@@ -275,7 +281,7 @@ def parseRoutine(inFile):
                     str = str[m2.span()[1]:]
                 str = m.group("vars")
                 while 1:
-                    m2 = varRe.match(str)
+                    m2 = VAR_RE.match(str)
                     if not m2:
                         raise SyntaxError("unexpected var format " +
                                           repr(str) + " in " + repr(lines))
@@ -326,7 +332,7 @@ def parseRoutine(inFile):
                             'iend': iend
                             }
                     routine['parsedDeclarations'].append(decl)
-            elif useParseRe.match(jline):
+            elif USE_PARSE_RE.match(jline):
                 routine['use'].append("".join(lines))
             else:
                 break
@@ -359,11 +365,12 @@ def parseRoutine(inFile):
                 subF.close()
             except:
                 import traceback
-                sys.stderr.write(
+                logger.debug(
                     "error trying to follow include " + m.group('file') + '\n')
-                sys.stderr.write(
+                logger.debug(
                     "warning this might lead to the removal of used variables\n")
-                traceback.print_exc()
+                if logger.isEnabledFor(logging.DEBUG):
+                    traceback.print_exc()
         (jline, _, lines) = stream.nextFortranLine()
     return routine
 
@@ -396,7 +403,7 @@ def enforceDeclDependecies(declarations):
         ivar = 0
         while ivar < len(declarations[idecl]['vars']):
             moved = 0
-            m = varRe.match(declarations[idecl]['vars'][ivar])
+            m = VAR_RE.match(declarations[idecl]['vars'][ivar])
             if not m:
                 raise SyntaxError('could not match var ' +
                                   repr(declarations[idecl]['vars'][ivar]))
@@ -404,7 +411,7 @@ def enforceDeclDependecies(declarations):
             rest = rest.lower()
             if rest:
                 for ivar2 in range(ivar + 1, len(declarations[idecl]['vars'])):
-                    m = varRe.match(declarations[idecl]['vars'][ivar2])
+                    m = VAR_RE.match(declarations[idecl]['vars'][ivar2])
                     if findWord(m.group('var').lower(), rest) != -1:
                         moved = ivar2 + 1
             if moved:
@@ -417,7 +424,7 @@ def enforceDeclDependecies(declarations):
                         ii += 1
                         if ii > 100000:
                             raise Error("could not enforce all constraints")
-                        m = varRe.match(declarations[idecl2]['vars'][ivar2])
+                        m = VAR_RE.match(declarations[idecl2]['vars'][ivar2])
                         if (ivar == 0 and
                                 findWord(m.group('var').lower(), typeParam) != -1):
                             declarations.insert(
@@ -529,7 +536,7 @@ def writeCompactDeclaration(declaration, file):
         file.writelines(d['iend'])
     else:
         if len(d['vars']) > 0:
-            decl = " " * indentSize * 2 + d['type']
+            decl = " " * INDENT_SIZE * 2 + d['type']
             if d['parameters']:  # do not drop empty parameter lists?
                 decl += d['parameters']
             if d['attributes']:
@@ -541,13 +548,14 @@ def writeCompactDeclaration(declaration, file):
             for var in d['vars']:
                 cur_len = sum([len(l) for l in dLine])
                 if(len(dLine) > 1 and cur_len + len(var) > 600):
-                    writeInCols(dLine, 3 * indentSize, decllinelength, 0, file)
+                    writeInCols(dLine, 3 * INDENT_SIZE,
+                                DECL_LINELENGTH, 0, file)
                     file.write("\n")
                     dLine = [decl]
                 if(len(dLine) > 1):
                     dLine[-1] += ", "
                 dLine.append(var)
-            writeInCols(dLine, 3 * indentSize, decllinelength, 0, file)
+            writeInCols(dLine, 3 * INDENT_SIZE, DECL_LINELENGTH, 0, file)
             file.write("\n")
 
 
@@ -562,7 +570,7 @@ def writeExtendedDeclaration(declaration, file):
         file.writelines(d['iend'])
     else:
         dLine = []
-        dLine.append(" " * indentSize * 2 + d['type'])
+        dLine.append(" " * INDENT_SIZE * 2 + d['type'])
         if d['parameters']:  # do not drop empty parameter lists?
             dLine.append(d['parameters'])
         if d['attributes']:
@@ -570,19 +578,19 @@ def writeExtendedDeclaration(declaration, file):
                 dLine[-1:] = [dLine[-1] + ", "]
                 dLine.append(a)
 
-        indentAtt = writeInCols(dLine, 3 * indentSize,
-                                decloffset + 1 + 2 * indentSize, 0, file)
-        file.write(" " * (decloffset + 2 * indentSize - indentAtt))
+        indentAtt = writeInCols(dLine, 3 * INDENT_SIZE,
+                                DECL_OFFSET + 1 + 2 * INDENT_SIZE, 0, file)
+        file.write(" " * (DECL_OFFSET + 2 * INDENT_SIZE - indentAtt))
         file.write(" :: ")
-        indentAtt = decloffset + 8
+        indentAtt = DECL_OFFSET + 8
 
         dLine = []
         for var in d['vars'][:-1]:
             dLine.append(var + ", ")
         dLine.append(d['vars'][-1])
 
-        writeInCols(dLine, decloffset + 4 + 2 * indentSize,
-                    decllinelength, indentAtt, file)
+        writeInCols(dLine, DECL_OFFSET + 4 + 2 * INDENT_SIZE,
+                    DECL_LINELENGTH, indentAtt, file)
         file.write("\n")
 
 
@@ -594,21 +602,23 @@ def writeDeclarations(parsedDeclarations, file):
         for v in d['vars']:
             maxLenVar = max(maxLenVar, len(v))
             totalLen += len(v)
-        if maxLenVar > 30 or totalLen > decllinelength - 4:
+        if maxLenVar > 30 or totalLen > DECL_LINELENGTH - 4:
             writeCompactDeclaration(d, file)
         else:
             writeExtendedDeclaration(d, file)
 
 
-def cleanDeclarations(routine, logFile=sys.stderr):
+def cleanDeclarations(routine):
     """cleans up the declaration part of the given parsed routine
     removes unused variables"""
-    global rVar
+    logger = logging.getLogger('prettify-logger')
+
+    global R_VAR
     containsRe = re.compile(r" *contains *$", re.IGNORECASE)
     if routine['core']:
         if containsRe.match(routine['core'][-1]):
-            logFile.write("*** routine %s contains other routines ***\n*** declarations not cleaned ***\n" %
-                          (routine['name']))
+            logger.debug("routine %s contains other routines\ndeclarations not cleaned\n" %
+                         (routine['name']))
             return
     commentToRemoveRe = re.compile(
         r" *! *(?:interface|arguments|parameters|locals?|\** *local +variables *\**|\** *local +parameters *\**) *$", re.IGNORECASE)
@@ -619,13 +629,13 @@ def cleanDeclarations(routine, logFile=sys.stderr):
         return
     if (routine['core']):
         if re.match(" *type *[a-zA-Z_]+ *$", routine['core'][0], re.IGNORECASE):
-            logFile.write("*** routine %s contains local types, not fully cleaned ***\n" %
-                          (routine['name']))
+            logger.debug("routine %s contains local types, not fully cleaned\n" %
+                         (routine['name']))
         if re.match(" *import+ *$", routine['core'][0], re.IGNORECASE):
-            logFile.write("*** routine %s contains import, not fully cleaned ***\n" %
-                          (routine['name']))
+            logger.debug("routine %s contains import, not fully cleaned\n" %
+                         (routine['name']))
     if re.search("^#", "".join(routine['declarations']), re.MULTILINE):
-        logFile.write("*** routine %s declarations contain preprocessor directives ***\n*** declarations not cleaned ***\n" % (
+        logger.debug("routine %s declarations contain preprocessor directives\ndeclarations not cleaned\n" % (
             routine['name']))
         return
     try:
@@ -654,7 +664,7 @@ def cleanDeclarations(routine, logFile=sys.stderr):
         for d in paramDecl:
             for i in range(len(d['vars'])):
                 v = d['vars'][i]
-                m = varRe.match(v)
+                m = VAR_RE.match(v)
                 lowerV = m.group("var").lower()
                 if lowerV == "routinen":
                     has_routinen = 1
@@ -681,7 +691,7 @@ def cleanDeclarations(routine, logFile=sys.stderr):
             localD['vars'] = []
             argD = None
             for v in d['vars']:
-                m = varRe.match(v)
+                m = VAR_RE.match(v)
                 lowerV = m.group("var").lower()
                 if lowerV in routine['lowercaseArguments']:
                     argD = {}
@@ -702,9 +712,9 @@ def cleanDeclarations(routine, logFile=sys.stderr):
                                 raise SyntaxError(
                                     "could not remove nullify of " + lowerV +
                                     " as expected, routine=" + routine['name'])
-                        logFile.write("removed var %s in routine %s\n" %
-                                      (lowerV, routine['name']))
-                        rVar += 1
+                        logger.info("removed var %s in routine %s\n" %
+                                    (lowerV, routine['name']))
+                        R_VAR += 1
             if (len(localD['vars'])):
                 localDecl.append(localD)
         argDecl = []
@@ -712,8 +722,8 @@ def cleanDeclarations(routine, logFile=sys.stderr):
             if argDeclDict.has_key(arg):
                 argDecl.append(argDeclDict[arg])
             else:
-                sys.stderr.write("warning, implicitly typed argument '" +
-                                 arg + "' in routine " + routine['name'] + '\n')
+                logger.debug("warning, implicitly typed argument '" +
+                             arg + "' in routine " + routine['name'] + '\n')
         if routine['kind'].lower() == 'function':
             aDecl = argDecl[:-1]
         else:
@@ -765,10 +775,10 @@ def cleanDeclarations(routine, logFile=sys.stderr):
         routine['declarations'] = [newDecl.getvalue()]
     except:
         if routine.has_key('name'):
-            logFile.write("**** exception cleaning routine " +
-                          routine['name'] + " ****")
-        logFile.write("parsedDeclartions=" +
-                      str(routine['parsedDeclarations']))
+            logger.critical("exception cleaning routine " +
+                            routine['name'])
+        logger.critical("parsedDeclartions=" +
+                        str(routine['parsedDeclarations']))
         raise
 
     newDecl = StringIO()
@@ -870,7 +880,7 @@ def parseUse(inFile):
             break
         origLines.append("".join(lines))
         # parse use
-        m = useParseRe.match(jline)
+        m = USE_PARSE_RE.match(jline)
         if m:
             useAtt = {'module': m.group('module'), 'comments': []}
 
@@ -936,21 +946,21 @@ def writeUses(modules, outFile):
 def writeUseLong(m, outFile):
     """Writes a use declaration in a nicer, but longer way"""
     if m.has_key('only'):
-        outFile.write(indentSize * ' ' + "USE " + m['module'] + "," +
+        outFile.write(INDENT_SIZE * ' ' + "USE " + m['module'] + "," +
                       string.rjust('ONLY: ', 38 - len(m['module'])))
         if m['only']:
             outFile.write(m['only'][0])
         for i in range(1, len(m['only'])):
             outFile.write(",&\n" + string.ljust("", 43 +
-                                                indentSize) + m['only'][i])
+                                                INDENT_SIZE) + m['only'][i])
     else:
-        outFile.write(indentSize * ' ' + "USE " + m['module'])
+        outFile.write(INDENT_SIZE * ' ' + "USE " + m['module'])
         if m.has_key('renames') and m['renames']:
             outFile.write("," + string.ljust("", 38) +
                           m['renames'][0])
             for i in range(1, len(m['renames'])):
                 outFile.write(",&\n" + string.ljust("", 43 +
-                                                    indentSize) + m['renames'][i])
+                                                    INDENT_SIZE) + m['renames'][i])
     if m['comments']:
         outFile.write("\n")
         outFile.write('\n'.join(m['comments']))
@@ -961,20 +971,20 @@ def writeUseShort(m, file):
     """Writes a use declaration in a compact way"""
     uLine = []
     if m.has_key('only'):
-        file.write(indentSize * ' ' + "USE " + m['module'] + "," +
+        file.write(INDENT_SIZE * ' ' + "USE " + m['module'] + "," +
                    string.rjust('ONLY: &\n', 40 - len(m['module'])))
         for k in m['only'][:-1]:
             uLine.append(k + ", ")
         uLine.append(m['only'][-1])
-        uLine[0] = " " * (5 + indentSize) + uLine[0]
+        uLine[0] = " " * (5 + INDENT_SIZE) + uLine[0]
     elif m.has_key('renames') and m['renames']:
-        uLine.append(indentSize * ' ' + "USE " + m['module'] + ", ")
+        uLine.append(INDENT_SIZE * ' ' + "USE " + m['module'] + ", ")
         for k in m['renames'][:-1]:
             uLine.append(k + ", ")
         uLine.append(m['renames'][-1])
     else:
-        uLine.append(indentSize * ' ' + "USE " + m['module'])
-    writeInCols(uLine, 5 + indentSize, decllinelength, 0, file)
+        uLine.append(INDENT_SIZE * ' ' + "USE " + m['module'])
+    writeInCols(uLine, 5 + INDENT_SIZE, DECL_LINELENGTH, 0, file)
     if m['comments']:
         file.write("\n")
         file.write('\n'.join(m['comments']))
@@ -1003,9 +1013,11 @@ def prepareImplicitUses(modules):
     return mods
 
 
-def cleanUse(modulesDict, rest, implicitUses=None, logFile=sys.stderr):
+def cleanUse(modulesDict, rest, implicitUses=None):
     """Removes the unneded modules (the ones that are not used in rest)"""
-    global rUse
+    logger = logging.getLogger('prettify-logger')
+
+    global R_USE
     exceptions = {}
     modules = modulesDict['modules']
     rest = rest.lower()
@@ -1015,8 +1027,8 @@ def cleanUse(modulesDict, rest, implicitUses=None, logFile=sys.stderr):
         if implicitUses and implicitUses.has_key(m_name):
             m_att = implicitUses[m_name]
         if m_att.has_key('_WHOLE_') and m_att['_WHOLE_']:
-            rUse += 1
-            logFile.write("removed USE of module " + m_name + "\n")
+            R_USE += 1
+            logger.info("removed USE of module " + m_name + "\n")
             del modules[i]
         elif modules[i].has_key("only"):
             els = modules[i]['only']
@@ -1027,15 +1039,15 @@ def cleanUse(modulesDict, rest, implicitUses=None, logFile=sys.stderr):
                         'could not parse use only:' + repr(els[j]))
                 impAtt = m.group('localName').lower()
                 if m_att.has_key(impAtt):
-                    rUse += 1
-                    logFile.write("removed USE " + m_name +
-                                  ", only: " + repr(els[j]) + "\n")
+                    R_USE += 1
+                    logger.info("removed USE " + m_name +
+                                ", only: " + repr(els[j]) + "\n")
                     del els[j]
                 elif not exceptions.has_key(impAtt):
                     if findWord(impAtt, rest) == -1:
-                        rUse += 1
-                        logFile.write("removed USE " + m_name +
-                                      ", only: " + repr(els[j]) + "\n")
+                        R_USE += 1
+                        logger.info("removed USE " + m_name +
+                                    ", only: " + repr(els[j]) + "\n")
                         del els[j]
             if len(modules[i]['only']) == 0:
                 if modules[i]['comments']:
@@ -1050,22 +1062,23 @@ def resetModuleN(moduleName, lines):
                            flags=re.IGNORECASE)
     for i in range(len(lines)):
         lines[i] = moduleNRe.sub(
-            " " * indentSize + "CHARACTER(len=*), PARAMETER, PRIVATE :: moduleN = '" +
+            " " * INDENT_SIZE + "CHARACTER(len=*), PARAMETER, PRIVATE :: moduleN = '" +
             moduleName + "'",
             lines[i])
 
 
-def rewriteFortranFile(inFile, outFile, indent, decl_linelength, decl_offset, logFile=sys.stderr, orig_filename=None):
+def rewriteFortranFile(inFile, outFile, indent, decl_linelength, decl_offset, orig_filename=None):
     """rewrites the use statements and declarations of inFile to outFile.
     It sorts them and removes the repetitions."""
     import os.path
+    logger = logging.getLogger('prettify-logger')
 
-    global indentSize
-    global decloffset
-    global decllinelength
-    indentSize = indent
-    decloffset = decl_offset
-    decllinelength = decl_linelength
+    global INDENT_SIZE
+    global DECL_OFFSET
+    global DECL_LINELENGTH
+    INDENT_SIZE = indent
+    DECL_OFFSET = decl_offset
+    DECL_LINELENGTH = decl_linelength
 
     moduleRe = re.compile(r" *(?:module|program) +(?P<moduleName>[a-zA-Z_][a-zA-Z_0-9]*) *(?:!.*)?$",
                           flags=re.IGNORECASE)
@@ -1083,6 +1096,7 @@ def rewriteFortranFile(inFile, outFile, indent, decl_linelength, decl_offset, lo
                 orig_filename = inFile.name
             fn = os.path.basename(orig_filename).rsplit(".", 1)[0]
             break
+
     try:
         modulesDict = parseUse(inFile)
         routines = []
@@ -1095,7 +1109,7 @@ def rewriteFortranFile(inFile, outFile, indent, decl_linelength, decl_offset, lo
         while routine['kind']:
             routine = parseRoutine(inFile)
             routines.append(routine)
-        map(lambda x: cleanDeclarations(x, logFile), routines)
+        map(lambda x: cleanDeclarations(x), routines)
         for routine in routines:
             coreLines.extend(routine['declarations'])
             coreLines.extend(routine['strippedCore'])
@@ -1103,11 +1117,12 @@ def rewriteFortranFile(inFile, outFile, indent, decl_linelength, decl_offset, lo
         nonStPrep = 0
         for line in modulesDict['origLines']:
             if (re.search('^#', line) and not commonUsesRe.match(line)):
-                sys.stderr.write('noMatch ' + repr(line) + '\n')
+                logger.debug('noMatch ' + repr(line) +
+                             '\n')  # what does it mean?
                 nonStPrep = 1
         if nonStPrep:
-            logFile.write(
-                "*** use statements contains preprocessor directives, not cleaning ***\n")
+            logger.debug(
+                "use statements contains preprocessor directives, not cleaning\n")
             outFile.writelines(modulesDict['origLines'])
         else:
             implicitUses = None
@@ -1123,11 +1138,11 @@ def rewriteFortranFile(inFile, outFile, indent, decl_linelength, decl_offset, lo
                     implicitUses = prepareImplicitUses(
                         implicitUsesRaw['modules'])
                 except:
-                    sys.stderr.write(
+                    logger.critical(
                         "ERROR trying to parse use statements contained in common uses precompiler file " + inc_absfn + '\n')
                     raise
             cleanUse(modulesDict, rest,
-                     implicitUses=implicitUses, logFile=logFile)
+                     implicitUses=implicitUses)
             normalizeModules(modulesDict['modules'])
             outFile.writelines(modulesDict['preComments'])
             writeUses(modulesDict['modules'], outFile)
@@ -1139,11 +1154,10 @@ def rewriteFortranFile(inFile, outFile, indent, decl_linelength, decl_offset, lo
             writeRoutine(routine, outFile)
     except:
         import traceback
-        logFile.write('-' * 60 + "\n")
-        traceback.print_exc(file=logFile)
-        logFile.write('-' * 60 + "\n")
-
-        logFile.write("Processing file '" + orig_filename + "'\n")
+        logger.critical('-' * 60 + "\n")
+        traceback.print_exc(file=sys.stderr)
+        logger.critical('-' * 60 + "\n")
+        logger.critical("Processing file '" + orig_filename + "'\n")
         raise
 
 # EOF

@@ -10,8 +10,7 @@ specialRepl = None
 
 
 def replaceWords(infile, outfile, replacements=repl,
-                 specialReplacements=specialRepl,
-                 logFile=sys.stderr):
+                 specialReplacements=specialRepl):
     """Replaces the words in infile writing the output to outfile.
 
     replacements is a dictionary with the words to replace.
