@@ -26,6 +26,12 @@
 #else
 # define CPASSERT(cond) IF(.NOT.(cond))CALL cp__a(__SHORT_FILE__,__LINE__)
 #endif
+! CPXASSERT which is guaranteed to compile-out in release builds.
+#if defined(NDEBUG)
+# define CPXASSERT(cond)
+#else
+# define CPXASSERT(cond) CPASSERT(cond)
+#endif
 
 ! The MARK_USED macro can be used to mark an argument/variable as used.
 ! It is intended to make it possible to switch on -Werror=unused-dummy-argument,
