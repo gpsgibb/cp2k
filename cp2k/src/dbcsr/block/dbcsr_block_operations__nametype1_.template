@@ -359,6 +359,7 @@
        rows, columns)
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
     USE libxsmm
+    INTEGER                            :: trans_error
 #endif
     [type1], DIMENSION(:), INTENT(OUT) :: extent_out
     [type1], DIMENSION(:), INTENT(IN)  :: extent_in
@@ -369,12 +370,13 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
-    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
+    IF (CP_VERSION4(1, 4, 4, 261).LE.CP_VERSION4( &
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
-        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            [typesize], rows, columns, rows, columns)
+        trans_error = libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                                     [typesize], rows, columns, rows, columns)
+        CPXASSERT(0.EQ.trans_error)
     ELSE
 #endif
 #if defined(__MKL)
@@ -463,6 +465,7 @@
        rows, columns)
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
     USE libxsmm
+    INTEGER                                       :: trans_error
 #endif
     INTEGER, INTENT(IN)                           :: rows, columns
     [type1], DIMENSION(columns,rows), INTENT(OUT) :: extent_out
@@ -473,12 +476,13 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
-    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
+    IF (CP_VERSION4(1, 4, 4, 261).LE.CP_VERSION4( &
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
-        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            [typesize], rows, columns, rows, columns)
+        trans_error = libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                                     [typesize], rows, columns, rows, columns)
+        CPXASSERT(0.EQ.trans_error)
     ELSE
 #endif
 #if defined(__MKL)
@@ -524,6 +528,7 @@
        rows, columns)
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
     USE libxsmm
+    INTEGER                                       :: trans_error
 #endif
     [type1], DIMENSION(:), INTENT(OUT)            :: extent_out
     INTEGER, INTENT(IN)                           :: rows, columns
@@ -534,12 +539,13 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM) && (1 < __LIBXSMM)
-    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
+    IF (CP_VERSION4(1, 4, 4, 261).LE.CP_VERSION4( &
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
-        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            [typesize], rows, columns, rows, columns)
+        trans_error = libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                                     [typesize], rows, columns, rows, columns)
+        CPXASSERT(0.EQ.trans_error)
     ELSE
 #endif
 #if defined(__MKL)
