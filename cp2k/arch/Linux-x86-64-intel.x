@@ -327,6 +327,7 @@ ifneq (,$(LIBXSMMROOT))
     ifeq (1,$(shell echo $$((1 < $(LIBXSMM)))))
       LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
       LDFLAGS += -Wl,--wrap=sgemm_,--wrap=dgemm_
+      WRAP ?= $(shell echo $$(($(LIBXSMM) - 1)))
       ifeq (0,$(OMP))
         ifeq (1,$(MKL))
           LIBS += -liomp5
@@ -334,6 +335,8 @@ ifneq (,$(LIBXSMMROOT))
           LIBS += -liomp5
         endif
       endif
+    else
+      WRAP ?= 0
     endif
 
     ifeq (1,$(shell echo "$$((0>=$(JIT)))"))
@@ -358,7 +361,7 @@ $(LIBXSMM_LIB): .state
 		OUTDIR=$(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib \
 		JIT=$(JIT) MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
 		PTHREAD=$(OMP) OPT=$(OPT) IPO=$(IPO) TARGET=$(TARGET) SSE=$(SSE) AVX=$(AVX) \
-		SYM=$(SYM) DBG=$(DBG) MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD) MIC=$(MIC)
+		SYM=$(SYM) DBG=$(DBG) MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD) MIC=$(MIC) WRAP=$(WRAP)
 LIBXSMM_UPTODATE_CHECK := $(shell touch .state)
 # translation unit (dummy) which allows to consider LIBXSMM_LIB as dep. in general
 # below hack is not triggering minimal rebuild but "good enough" (relink)
