@@ -13,7 +13,6 @@
 !> \author  Joost VandeVondele
 ! **************************************************************************************************
 MODULE dbcsr_api
-   USE array_types,                     ONLY: array_data
    USE dbcsr_arnoldi,                   ONLY: dbcsr_arnoldi_ev,&
                                               dbcsr_arnoldi_extremal
    USE dbcsr_arnoldi_data_methods,      ONLY: dbcsr_arnoldi_data,&
@@ -97,7 +96,6 @@ MODULE dbcsr_api
                                               dbcsr_test_arnoldi,&
                                               dbcsr_test_binary_io,&
                                               dbcsr_test_mm
-   USE dbcsr_toollib,                   ONLY: swap
    USE dbcsr_transformations,           ONLY: dbcsr_complete_redistribute,&
                                               dbcsr_desymmetrize_deep,&
                                               dbcsr_distribute,&
@@ -134,7 +132,6 @@ MODULE dbcsr_api
              heap_release, &
              heap_reset_first, &
              heap_t, &
-             array_data, &
              add_work_coordinate, &
              convert_offsets_to_sizes, &
              convert_sizes_to_offsets, &
@@ -326,7 +323,6 @@ MODULE dbcsr_api
              mm_name_xsmm, &
              has_acc, &
              multrec_limit, &
-             swap, &
              dbcsr_set_default_config, &
              dbcsr_row_block_sizes, &
              dbcsr_col_block_sizes, &

@@ -20,9 +20,8 @@ MODULE cp_dbcsr_interface
         accdrv_avoid_after_busy, accdrv_binning_binsize, accdrv_binning_nbins, &
         accdrv_do_inhomogenous, accdrv_min_flop_process, accdrv_min_flop_sort, &
         accdrv_posterior_buffers, accdrv_posterior_streams, accdrv_priority_buffers, &
-        accdrv_priority_streams, add_work_coordinate, array_data, convert_csr_to_dbcsr, &
-        convert_dbcsr_to_csr, convert_offsets_to_sizes, convert_sizes_to_offsets, &
-        cp_dbcsr_iterator=>dbcsr_iterator, &
+        accdrv_priority_streams, add_work_coordinate, convert_csr_to_dbcsr, convert_dbcsr_to_csr, &
+        convert_offsets_to_sizes, convert_sizes_to_offsets, cp_dbcsr_iterator=>dbcsr_iterator, &
         cp_distribution_get_num_images=>dbcsr_distribution_get_num_images_1d, &
         create_bl_distribution, csr_create_from_dbcsr, csr_create_new, csr_create_template, &
         csr_dbcsr_blkrow_dist, csr_destroy, csr_eqrow_ceil_dist, csr_eqrow_floor_dist, csr_p_type, &
@@ -75,7 +74,7 @@ MODULE cp_dbcsr_interface
         get_selected_ritz_vector, has_acc, has_mpi, heap_fill, heap_get_first, heap_new, &
         heap_release, heap_reset_first, heap_t, mm_driver_auto, mm_driver_blas, mm_driver_matmul, &
         mm_driver_smm, mm_driver_xsmm, mm_name_auto, mm_name_blas, mm_name_matmul, mm_name_smm, &
-        mm_name_xsmm, multrec_limit, set_arnoldi_initial_vector, setup_arnoldi_data, swap
+        mm_name_xsmm, multrec_limit, set_arnoldi_initial_vector, setup_arnoldi_data
    USE kinds,                           ONLY: default_string_length,&
                                               dp,&
                                               int_8,&
@@ -1860,7 +1859,7 @@ CONTAINS
       CHARACTER                                          :: tr_a_l, tr_b_l
       INTEGER                                            :: a_cols_total, a_rows_total, &
                                                             b_cols_total, b_rows_total, &
-                                                            c_cols_total, c_rows_total
+                                                            c_cols_total, c_rows_total, tmp
       INTEGER, DIMENSION(:), POINTER                     :: new_col_clusters, new_col_dist, &
                                                             new_col_size, new_row_clusters, &
                                                             new_row_dist, new_row_size
@@ -1888,8 +1887,16 @@ CONTAINS
       b_cols_total = cp_dbcsr_nfullcols_total(matrix_b)
       a_rows_total = cp_dbcsr_nfullrows_total(matrix_a)
       a_cols_total = cp_dbcsr_nfullcols_total(matrix_a)
-      IF (atr) CALL swap(a_cols_total, a_rows_total)
-      IF (btr) CALL swap(b_cols_total, b_rows_total)
+      IF (atr) THEN
+         tmp = a_cols_total
+         a_cols_total = a_rows_total
+         a_rows_total = tmp
+      ENDIF
+      IF (btr) THEN
+         tmp = b_cols_total
+         b_cols_total = b_rows_total
+         b_rows_total = tmp
+      ENDIF
 
       NULLIFY (new_row_clusters, new_col_clusters)
 
@@ -2121,7 +2128,8 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'cp_dbcsr_row_block_sizes', &
          routineP = moduleN//':'//routineN
 
-      row_blk_sizes => array_data(matrix%matrix%m%row_blk_size)
+      CALL dbcsr_get_info(matrix%matrix, row_blk_size=row_blk_sizes)
+
    END FUNCTION cp_dbcsr_row_block_sizes
 
 ! **************************************************************************************************
@@ -2136,7 +2144,8 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'cp_dbcsr_col_block_sizes', &
          routineP = moduleN//':'//routineN
 
-      col_blk_sizes => array_data(matrix%matrix%m%col_blk_size)
+      CALL dbcsr_get_info(matrix%matrix, col_blk_size=col_blk_sizes)
+
    END FUNCTION cp_dbcsr_col_block_sizes
 
 ! **************************************************************************************************
