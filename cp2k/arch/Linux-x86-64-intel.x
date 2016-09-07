@@ -582,6 +582,10 @@ mp2_optimize_ri_basis.o: mp2_optimize_ri_basis.F
 	$(FC) -c $(FCFLAGS) -O0 $<
 qs_dispersion_nonloc.o: qs_dispersion_nonloc.F
 	$(FC) -c $(FCFLAGS) -O$(OPT1) $<
+ifneq (0,$(OMP))
+fast.o: fast.F
+	$(FC) -c $(filter-out -openmp -qopenmp,$(FCFLAGS)) $<
+endif
 endif
 
 # likely outdated or resolved
