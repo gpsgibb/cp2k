@@ -21,7 +21,7 @@ AR       = xiar -r
 #LIBINTROOT = $(HOME)/libint
 
 # LIBXC: configure, build, and install
-# Version 2.2.2 (tested)
+# Version 2.2.2 and 3.0.0 (tested)
 #
 # $ autoreconf --force --install
 # $ env \
