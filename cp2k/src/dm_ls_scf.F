@@ -430,6 +430,8 @@ CONTAINS
             DO ispin = 1, SIZE(ls_scf_env%matrix_p)
                ! linear combination of P's is not idempotent. A bit of McWeeny is needed to ensure it is again
                IF (SIZE(ls_scf_env%matrix_p) == 1) CALL cp_dbcsr_scale(ls_scf_env%matrix_p(ispin), 0.5_dp)
+               ! to ensure that noisy blocks do not build up during MD (in particular with curvy) filter that guess a bit more
+               CALL cp_dbcsr_filter(ls_scf_env%matrix_p(ispin), ls_scf_env%eps_filter**(2.0_dp/3.0_dp))
                CALL purify_mcweeny(ls_scf_env%matrix_p(ispin:ispin), ls_scf_env%eps_filter, 3)
                IF (SIZE(ls_scf_env%matrix_p) == 1) CALL cp_dbcsr_scale(ls_scf_env%matrix_p(ispin), 2.0_dp)
 
@@ -1130,6 +1132,7 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'ls_scf_post', routineP = moduleN//':'//routineN
 
       INTEGER                                            :: handle, ispin, unit_nr
+      REAL(KIND=dp)                                      :: occ
       TYPE(cp_dbcsr_p_type), DIMENSION(:), POINTER       :: matrix_w
       TYPE(cp_logger_type), POINTER                      :: logger
 
@@ -1147,9 +1150,16 @@ CONTAINS
       IF (.NOT. ls_scf_env%do_pao) &
          CALL ls_scf_store_result(ls_scf_env)
 
-      ! write homo and lumo energy (if not already part of the output)
+      ! write homo and lumo energy and occupation (if not already part of the output)
       IF (ls_scf_env%curvy_steps) THEN
          CALL post_scf_homo_lumo(ls_scf_env)
+
+         ! always report P occ
+         IF (unit_nr > 0) WRITE (unit_nr, *) ""
+         DO ispin = 1, ls_scf_env%nspins
+            occ = cp_dbcsr_get_occupation(ls_scf_env%matrix_p(ispin))
+            IF (unit_nr > 0) WRITE (unit_nr, '(T2,A,F20.12)') "Density matrix (P) occupation ", occ
+         ENDDO
       ENDIF
 
       ! compute the matrix_w if associated

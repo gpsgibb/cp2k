@@ -18,7 +18,7 @@ MODULE pao_methods
    USE cp_dbcsr_interface,              ONLY: &
         cp_dbcsr_add, cp_dbcsr_binary_read, cp_dbcsr_checksum, cp_dbcsr_col_block_sizes, &
         cp_dbcsr_complete_redistribute, cp_dbcsr_copy_into_existing, cp_dbcsr_create, &
-        cp_dbcsr_desymmetrize, cp_dbcsr_distribution, cp_dbcsr_distribution_new, &
+        cp_dbcsr_desymmetrize, cp_dbcsr_distribution, cp_dbcsr_distribution_new, cp_dbcsr_filter, &
         cp_dbcsr_get_block_p, cp_dbcsr_get_info, cp_dbcsr_init, cp_dbcsr_iterator, &
         cp_dbcsr_iterator_blocks_left, cp_dbcsr_iterator_next_block, cp_dbcsr_iterator_start, &
         cp_dbcsr_iterator_stop, cp_dbcsr_multiply, cp_dbcsr_p_type, cp_dbcsr_release, &
@@ -1122,9 +1122,9 @@ CONTAINS
       ! We are storing the density matrix in the non-orthonormal primary basis.
       ! While the orthonormal basis would yield better extrapolations,
       ! we simply can not affort to calculat S_sqrt in the primary basis.
-      ! We can't call matrix_ls_to_qs because it uses cp_dbcsr_copy_into_existing()
       DO ispin = 1, dft_control%nspins
          ! reverse possible molecular clustering
+         ! We can't call matrix_ls_to_qs because it uses cp_dbcsr_copy_into_existing()
          CALL matrix_decluster(matrix_p_dc, ls_scf_env%matrix_p(ispin), ls_mstruct)
 
          ! transform into primary basis
@@ -1150,6 +1150,12 @@ CONTAINS
       TYPE(qs_environment_type), POINTER                 :: qs_env
       TYPE(ls_scf_env_type), TARGET                      :: ls_scf_env
 
+      CHARACTER(len=*), PARAMETER :: routineN = 'pao_guess_initial_P'
+
+      INTEGER                                            :: handle
+
+      CALL timeset(routineN, handle)
+
       IF (ls_scf_env%scf_history%istore > 0) THEN
          CALL pao_aspc_guess_P(pao, qs_env, ls_scf_env)
          pao%need_initial_scf = .TRUE.
@@ -1164,6 +1170,8 @@ CONTAINS
             pao%need_initial_scf = .TRUE.
          ENDIF
       ENDIF
+
+      CALL timestop(handle)
 
    END SUBROUTINE pao_guess_initial_P
 
@@ -1183,7 +1191,7 @@ CONTAINS
       INTEGER                                            :: handle, iaspc, ispin, istore, naspc
       REAL(dp)                                           :: alpha
       TYPE(cp_dbcsr_p_type), DIMENSION(:), POINTER       :: matrix_s
-      TYPE(cp_dbcsr_type)                                :: matrix_P, matrix_tmp
+      TYPE(cp_dbcsr_type)                                :: matrix_P
       TYPE(dft_control_type), POINTER                    :: dft_control
       TYPE(ls_mstruct_type), POINTER                     :: ls_mstruct
 
@@ -1195,8 +1203,6 @@ CONTAINS
 
       IF (pao%iw > 0) WRITE (pao%iw, *) "PAO| Calculating initial guess with ASPC"
 
-      CALL cp_dbcsr_init(matrix_tmp)
-      CALL cp_dbcsr_create(matrix_tmp, template=ls_mstruct%matrix_A)
       CALL cp_dbcsr_init(matrix_P)
       CALL cp_dbcsr_create(matrix_P, template=matrix_s(1)%matrix)
 
@@ -1212,16 +1218,16 @@ CONTAINS
          ENDDO
 
          ! transform back from primary basis into pao basis
-         CALL cp_dbcsr_multiply("N", "N", 1.0_dp, matrix_P, ls_mstruct%matrix_A, 0.0_dp, matrix_tmp)
-         CALL cp_dbcsr_multiply("T", "N", 1.0_dp, ls_mstruct%matrix_A, matrix_tmp, 0.0_dp, ls_scf_env%matrix_p(ispin))
+         CALL matrix_qs_to_ls(ls_scf_env%matrix_p(ispin), matrix_P, ls_scf_env%ls_mstruct, covariant=.FALSE.)
       ENDDO
 
-      CALL cp_dbcsr_release(matrix_tmp)
       CALL cp_dbcsr_release(matrix_P)
 
       ! linear combination of P's is not idempotent. A bit of McWeeny is needed to ensure it is again
       DO ispin = 1, dft_control%nspins
          IF (dft_control%nspins == 1) CALL cp_dbcsr_scale(ls_scf_env%matrix_p(ispin), 0.5_dp)
+         ! to ensure that noisy blocks do not build up during MD (in particular with curvy) filter that guess a bit more
+         CALL cp_dbcsr_filter(ls_scf_env%matrix_p(ispin), ls_scf_env%eps_filter**(2.0_dp/3.0_dp))
          ! we could go to the orthonomal basis, but it seems not worth the trouble
          ! TODO : 10 iterations is a conservative upper bound, figure out when it fails
          CALL purify_mcweeny(ls_scf_env%matrix_p(ispin:ispin), ls_scf_env%matrix_s, ls_scf_env%eps_filter, 10)

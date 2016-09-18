@@ -70,6 +70,13 @@ MODULE qs_dispersion_pairpot
                                               neighbor_list_set_p_type
    USE virial_methods,                  ONLY: virial_pair_force
    USE virial_types,                    ONLY: virial_type
+
+!$ USE OMP_LIB,                         ONLY: omp_get_max_threads,&
+!$                                            omp_get_thread_num,&
+!$                                            omp_lock_kind,&
+!$                                            omp_init_lock, omp_set_lock,&
+!$                                            omp_unset_lock, omp_destroy_lock
+
 #include "./base/base_uses.f90"
 
    IMPLICIT NONE
@@ -882,13 +889,16 @@ CONTAINS
       TYPE(qs_kind_type), DIMENSION(:), POINTER          :: qs_kind_set
       TYPE(virial_type), POINTER                         :: virial
 
+!$    INTEGER(kind=omp_lock_kind), ALLOCATABLE, DIMENSION(:) :: locks
+!$    INTEGER                                            :: lock, number_of_locks
+
+      energy = 0._dp
+
       IF (dispersion_env%type .NE. xc_vdw_fun_pairpot) THEN
          RETURN
       END IF
 
       CALL timeset(routineN, handle)
-
-      energy = 0._dp
 
       NULLIFY (atomic_kind_set, qs_kind_set, sab_cn, sab_vdw)
 
@@ -1036,9 +1046,34 @@ CONTAINS
 
          sab_cn => dispersion_env%sab_cn
          num_pe = 1
+!$       num_pe = omp_get_max_threads()
          CALL neighbor_list_iterator_create(nl_iterator, sab_cn, nthread=num_pe)
+!$       number_of_locks = natom
+
+!$OMP PARALLEL DEFAULT( NONE )                                        &
+!$OMP           SHARED( locks, number_of_locks, nl_iterator           &
+!$OMP                 , ghost, floating, atomnumber, eps_cn           &
+!$OMP                 , dispersion_env, calculate_forces, debugall    &
+!$OMP                 , dcnum, cnumbers                               &
+!$OMP                 )                                               &
+!$OMP          PRIVATE( mepos                                         &
+!$OMP                 , ikind, jkind, iatom, jatom, rij, rcc          &
+!$OMP                 , za, zb, rcova, rcovb, cnab, dcnab             &
+!$OMP                 , ni, nj                                        &
+!$OMP                 )
+
+!$OMP SINGLE
+!$       ALLOCATE (locks(number_of_locks))
+!$OMP END SINGLE
+
+!$OMP DO
+!$       DO lock = 1, number_of_locks
+!$          call omp_init_lock(locks(lock))
+!$       END DO
+!$OMP END DO
 
          mepos = 0
+!$       mepos = omp_get_thread_num()
          DO WHILE (neighbor_list_iterate(nl_iterator, mepos=mepos) == 0)
 
             CALL get_iterator_info(nl_iterator, mepos=mepos, ikind=ikind, jkind=jkind, iatom=iatom, jatom=jatom, r=rij)
@@ -1052,12 +1087,15 @@ CONTAINS
                rcovb = dispersion_env%rcov(zb)
                CALL cnparam_d3(rcc, rcova, rcovb, dispersion_env%k1, cnab, dcnab)
                IF (cnab > eps_cn) THEN
+!$OMP ATOMIC
                   cnumbers(iatom) = cnumbers(iatom)+cnab
                   IF (iatom /= jatom) THEN
+!$OMP ATOMIC
                      cnumbers(jatom) = cnumbers(jatom)+cnab
                   END IF
                END IF
                IF (calculate_forces .OR. debugall .AND. cnab > eps_cn) THEN
+!$                CALL omp_set_lock(locks(iatom))
                   dcnum(iatom)%neighbors = dcnum(iatom)%neighbors+1
                   ni = dcnum(iatom)%neighbors
                   IF (ni > SIZE(dcnum(iatom)%nlist)) THEN
@@ -1068,8 +1106,10 @@ CONTAINS
                   dcnum(iatom)%nlist(ni) = jatom
                   dcnum(iatom)%dvals(ni) = dcnab
                   dcnum(iatom)%rik(1:3, ni) = rij(1:3)
+!$                CALL omp_unset_lock(locks(iatom))
 
                   IF (iatom /= jatom) THEN
+!$                   CALL omp_set_lock(locks(jatom))
                      dcnum(jatom)%neighbors = dcnum(jatom)%neighbors+1
                      nj = dcnum(jatom)%neighbors
                      IF (nj > SIZE(dcnum(jatom)%dvals)) THEN
@@ -1080,11 +1120,23 @@ CONTAINS
                      dcnum(jatom)%nlist(nj) = iatom
                      dcnum(jatom)%dvals(nj) = dcnab
                      dcnum(jatom)%rik(1:3, nj) = -rij(1:3)
+!$                   CALL omp_unset_lock(locks(jatom))
                   END IF
                END IF
             END IF
          END DO
 
+!$OMP BARRIER        ! Wait for all threads to finish the loop before locks can be freed
+!$OMP DO
+!$       DO lock = 1, number_of_locks
+!$          call omp_destroy_lock(locks(lock))
+!$       END DO
+!$OMP END DO
+!$OMP SINGLE
+!$       DEALLOCATE (locks)
+!$OMP END SINGLE NOWAIT
+
+!$OMP END PARALLEL
          CALL neighbor_list_iterator_release(nl_iterator)
 
          CALL mp_sum(cnumbers, para_env%group)
