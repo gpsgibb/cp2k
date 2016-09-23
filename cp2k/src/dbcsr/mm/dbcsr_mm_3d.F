@@ -52,18 +52,19 @@ MODULE dbcsr_mm_3d
                                               dbcsr_iterator_next_block,&
                                               dbcsr_iterator_start,&
                                               dbcsr_iterator_stop
-   USE dbcsr_mem_methods,               ONLY: dbcsr_mempool_ensure_capacity
+   USE dbcsr_mem_methods,               ONLY: dbcsr_mempool_limit_capacity
    USE dbcsr_methods,                   ONLY: &
         dbcsr_col_block_offsets, dbcsr_col_block_sizes, dbcsr_destroy_array, dbcsr_distribution, &
         dbcsr_get_data_type, dbcsr_get_index_memory_type, dbcsr_has_symmetry, &
         dbcsr_image_dist_hold, dbcsr_init, dbcsr_nblkcols_total, dbcsr_nblkrows_total, &
-        dbcsr_nfullcols_total, dbcsr_nfullrows_total, dbcsr_release, dbcsr_release_locals, &
-        dbcsr_row_block_offsets, dbcsr_row_block_sizes, dbcsr_valid_index
+        dbcsr_nfullcols_local, dbcsr_nfullcols_total, dbcsr_nfullrows_local, &
+        dbcsr_nfullrows_total, dbcsr_release, dbcsr_release_locals, dbcsr_row_block_offsets, &
+        dbcsr_row_block_sizes, dbcsr_valid_index
    USE dbcsr_mm_common,                 ONLY: &
         count_mpi_statistics, dbcsr_mm_multrec_type_p, dbcsr_mpi_statistics, enumerate_blk_sizes, &
         max_memory, max_nblocks, memtype_abpanel_1, memtype_abpanel_2, memtype_mpi_buffer, &
-        memtype_product_wm, memtype_trsbuffer_1, memtype_trsbuffer_2, rec_sort_index, &
-        setup_buffer_matrix
+        memtype_product_wm, memtype_trsbuffer_1, memtype_trsbuffer_2, product_matrix_size_guess, &
+        rec_sort_index, setup_buffer_matrix
    USE dbcsr_mm_multrec,                ONLY: dbcsr_mm_multrec_finalize,&
                                               dbcsr_mm_multrec_init,&
                                               dbcsr_mm_multrec_multiply,&
@@ -1258,9 +1259,9 @@ CONTAINS
          NULLIFY (meta_recv)
          CALL ensure_array_size(meta_recv, ub=SUM(recv_size(imeta, :)), &
                                 nocopy=.TRUE., memory_type=memtype_mpi_buffer, zero_pad=.TRUE.)
+         CALL timeset(routineN//"_data", handle2)
          IF (do_virt) THEN
             ! Exchange data
-            CALL timeset(routineN//"_data", handle2)
             CALL hybrid_alltoall_any(data_send, send_size(idata, :), send_displ(idata, :), &
                                      data_recv, recv_size(idata, :), recv_displ(idata, :), &
                                      mp_obj, &
@@ -1269,12 +1270,12 @@ CONTAINS
                                     meta_recv, recv_size(imeta, :), recv_displ(imeta, :), &
                                     mp_obj, &
                                     most_ptp=.TRUE., remainder_ptp=.TRUE., no_hybrid=.FALSE.)
-            CALL timestop(handle2)
          ELSE
             ! Send/recv data to the symmetric proc
             CALL dbcsr_sendrecv_any(data_send, sym_p, data_recv, sym_p, grp)
             CALL mp_sendrecv(meta_send, sym_p, meta_recv, sym_p, grp)
          ENDIF
+         CALL timestop(handle2)
          ! Delete send data
          CALL dbcsr_data_release(data_send)
          DEALLOCATE (meta_send)
@@ -1802,7 +1803,7 @@ CONTAINS
          right_col_nimages, right_data_size, right_meta_size, right_myfirstvcol, &
          right_myfirstvrow, right_mypcol, right_myprow, right_npcols, right_nprows, &
          right_nrequests, right_row_mult, right_row_nimages, right_row_total_nimages, row, &
-         shift_k, size_guess, start_k, v_ki
+         shift_k, size_guess, size_guess_init, start_k, v_ki
       INTEGER(KIND=int_8)                                :: mem
       INTEGER, ALLOCATABLE, DIMENSION(:)                 :: left_vrow, product_matrix_epss_displ, &
                                                             product_matrix_epss_size, &
@@ -2157,10 +2158,10 @@ CONTAINS
       !
       ! update capacity of memory-pools
       IF (has_acc) THEN
-         CALL dbcsr_mempool_ensure_capacity(memtype_abpanel_1%pool, &
-                                            capacity=left_col_nimages+right_row_nimages)
-         CALL dbcsr_mempool_ensure_capacity(memtype_abpanel_2%pool, &
-                                            capacity=left_col_nimages+right_row_nimages)
+         CALL dbcsr_mempool_limit_capacity(memtype_abpanel_1%pool, &
+                                           capacity=nranks3D+1)
+         CALL dbcsr_mempool_limit_capacity(memtype_abpanel_2%pool, &
+                                           capacity=nranks3D+1)
       ENDIF
       !
       ! Prepare buffers for computation
@@ -2209,22 +2210,30 @@ CONTAINS
       ! These values for meta data are used for global values
       right_global_indices(dbcsr_slot_nblkrows_total:dbcsr_slot_nfullcols_local) = &
          (/ &
-         matrix_right%m%nblkrows_total, &
-         matrix_right%m%nblkcols_total, &
-         matrix_right%m%nfullrows_total, &
-         matrix_right%m%nfullcols_total, &
+         dbcsr_nblkrows_total(matrix_right), &
+         dbcsr_nblkcols_total(matrix_right), &
+         dbcsr_nfullrows_total(matrix_right), &
+         dbcsr_nfullcols_total(matrix_right), &
          0, 0, &
-         matrix_right%m%nfullrows_local, &
-         matrix_right%m%nfullcols_local/)
+         dbcsr_nfullrows_local(matrix_right), &
+         dbcsr_nfullcols_local(matrix_right)/)
       left_global_indices(dbcsr_slot_nblkrows_total:dbcsr_slot_nfullcols_local) = &
          (/ &
-         matrix_left%m%nblkrows_total, &
-         matrix_left%m%nblkcols_total, &
-         matrix_left%m%nfullrows_total, &
-         matrix_left%m%nfullcols_total, &
+         dbcsr_nblkrows_total(matrix_left), &
+         dbcsr_nblkcols_total(matrix_left), &
+         dbcsr_nfullrows_total(matrix_left), &
+         dbcsr_nfullcols_total(matrix_left), &
          0, 0, &
-         matrix_left%m%nfullrows_local, &
-         matrix_left%m%nfullcols_local/)
+         dbcsr_nfullrows_local(matrix_left), &
+         dbcsr_nfullcols_local(matrix_left)/)
+      !
+      ! Evaluate sizes for workspaces
+      IF (.NOT. keep_sparsity) THEN
+         size_guess_init = product_matrix_size_guess(matrix_left, matrix_right, product_matrix, &
+                                                     left_data_size, right_data_size, &
+                                                     left_col_nimages, right_row_nimages, &
+                                                     nthreads)
+      ENDIF
       !
       ! Preallocate norms arrays
       IF (otf_filtering) THEN
@@ -2447,7 +2456,7 @@ CONTAINS
 !$OMP                  matrix_right, nthreads, &
 !$OMP                  irow3D, icol3D, myrow3D, mycol3D, keep_product_data, &
 !$OMP                  product_matrix_epss_displ, product_matrix_epss_size, &
-!$OMP                  memtype_product_wm)
+!$OMP                  memtype_product_wm, size_guess_init, nranks3D)
             !
             ! Setup product work areas
             !
@@ -2466,6 +2475,9 @@ CONTAINS
             ! The work arrays have to be setup
             size_guess = product_matrix3D%mats(irow3D, icol3D)% &
                          matrix%m%wms(ithread+1)%datasize ! Should be minimal
+            IF (.NOT. keep_sparsity) THEN
+               size_guess = MAX(size_guess, size_guess_init)
+            ENDIF
             CALL dbcsr_data_ensure_size(product_matrix3D%mats(irow3D, icol3D)% &
                                         matrix%m%wms(ithread+1)%data_area, &
                                         size_guess)
@@ -2488,7 +2500,8 @@ CONTAINS
                                                                         product_matrix_epss_displ(irow3D)+ &
                                                                         product_matrix_epss_size(irow3D)-1), &
                                        block_estimate=max_nblocks/nthreads, &
-                                       right_row_blk_size=dbcsr_row_block_sizes(matrix_right))
+                                       right_row_blk_size=dbcsr_row_block_sizes(matrix_right), &
+                                       nlayers=nranks3D)
 !$OMP END PARALLEL
             !
             product_matrix3D%mats(irow3D, icol3D)%matrix%m%nblks = 0
@@ -3057,15 +3070,15 @@ CONTAINS
          left_v_i, left_vcol, left_vrow, local_data_size_gather, local_meta_size_gather, &
          meta_size_image
       INTEGER :: meta_size_scatter, metronome, min_nimages, mynode, mypcol, myprow, &
-         nblkrows_local, nimages_scatter, nsteps_k, nthreads, numnodes, nvirt_k, recv_vcol, &
-         recv_vcol_displ, recv_vrow, recv_vrow_displ, request_product_matrix, right_col_mult, &
-         right_col_nimages, right_data_offset, right_data_offset_diag, right_data_size, &
-         right_max_data_size, right_max_meta_size, right_meta_offset, right_meta_offset_diag, &
-         right_meta_size, right_myfirstvcol, right_myfirstvrow, right_mypcol, right_myprow, &
-         right_npcols, right_nprows, right_nrequests, right_row_mult, right_row_nimages, &
-         right_row_total_nimages
-      INTEGER :: right_v_i, right_vcol, right_vrow, row, size_guess, size_index_merged, &
-         size_index_unmerged, v_ci, v_k_loc, v_ki, v_ri
+         nblkrows_local, nimages_scatter, nlayers, nsteps_k, nthreads, numnodes, nvirt_k, &
+         recv_vcol, recv_vcol_displ, recv_vrow, recv_vrow_displ, request_product_matrix, &
+         right_col_mult, right_col_nimages, right_data_offset, right_data_offset_diag, &
+         right_data_size, right_max_data_size, right_max_meta_size, right_meta_offset, &
+         right_meta_offset_diag, right_meta_size, right_myfirstvcol, right_myfirstvrow, &
+         right_mypcol, right_myprow, right_npcols, right_nprows, right_nrequests, right_row_mult, &
+         right_row_nimages
+      INTEGER :: right_row_total_nimages, right_v_i, right_vcol, right_vrow, row, size_guess, &
+         size_index_merged, size_index_unmerged, v_ci, v_k_loc, v_ki, v_ri
       INTEGER(KIND=int_8)                                :: mem
       INTEGER, ALLOCATABLE, DIMENSION(:) :: data_displ_gather, data_size_gather, &
          indices_common_unmerged, left_displ_vunmerged, left_get_requests_images, &
@@ -3306,7 +3319,9 @@ CONTAINS
             ENDDO
          ENDIF
       ENDIF
+      nlayers = 1
       IF (do_scatter) THEN
+         nlayers = 2
          IF (.NOT. dbcsr_data_valid(local_data_product_scatter)) THEN
             CALL dbcsr_data_init(local_data_product_scatter)
             CALL dbcsr_data_new(local_data_product_scatter, data_type=data_type, &
@@ -3342,7 +3357,7 @@ CONTAINS
 !$OMP                  row_max_epss, max_nblocks, &
 !$OMP                  matrix_right, nthreads, &
 !$OMP                  memtype_product_wm, &
-!$OMP                  keep_product_data)
+!$OMP                  keep_product_data, nlayers)
             !
             ! Setup product work areas
             !
@@ -3372,7 +3387,8 @@ CONTAINS
                                        eps=filter_eps, &
                                        row_max_epss=row_max_epss, &
                                        block_estimate=max_nblocks/nthreads, &
-                                       right_row_blk_size=dbcsr_row_block_sizes(matrix_right))
+                                       right_row_blk_size=dbcsr_row_block_sizes(matrix_right), &
+                                       nlayers=nlayers)
 !$OMP END PARALLEL
             product_matrix_scatter%m%nblks = 0
             product_matrix_scatter%m%nze = 0
@@ -3425,7 +3441,7 @@ CONTAINS
 !$OMP          SHARED (product_matrix, multrec, &
 !$OMP                  keep_sparsity, filter_eps, &
 !$OMP                  row_max_epss, max_nblocks, &
-!$OMP                  matrix_right, nthreads)
+!$OMP                  matrix_right, nthreads, nlayers)
       !
       ! Setup product work areas
       !
@@ -3448,15 +3464,16 @@ CONTAINS
                                  eps=filter_eps, &
                                  row_max_epss=row_max_epss, &
                                  block_estimate=max_nblocks/nthreads, &
-                                 right_row_blk_size=dbcsr_row_block_sizes(matrix_right))
+                                 right_row_blk_size=dbcsr_row_block_sizes(matrix_right), &
+                                 nlayers=nlayers)
 !$OMP END PARALLEL
       !
       ! update capacity of memory-pools
       IF (has_acc) THEN
-         CALL dbcsr_mempool_ensure_capacity(memtype_abpanel_1%pool, &
-                                            capacity=left_col_nimages+right_row_nimages)
-         CALL dbcsr_mempool_ensure_capacity(memtype_abpanel_2%pool, &
-                                            capacity=left_col_nimages+right_row_nimages)
+         CALL dbcsr_mempool_limit_capacity(memtype_abpanel_1%pool, &
+                                           capacity=left_col_nimages+right_row_nimages)
+         CALL dbcsr_mempool_limit_capacity(memtype_abpanel_2%pool, &
+                                           capacity=left_col_nimages+right_row_nimages)
       ENDIF
       !
       ! Wait refs and max norms (sent in make_buffers)
