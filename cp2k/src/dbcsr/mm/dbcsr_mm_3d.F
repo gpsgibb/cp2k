@@ -81,7 +81,8 @@ MODULE dbcsr_mm_3d
         hybrid_alltoall_i1
    USE dbcsr_operations,                ONLY: dbcsr_add
    USE dbcsr_ptr_util,                  ONLY: ensure_array_size,&
-                                              memory_copy
+                                              memory_copy,&
+                                              memory_deallocate
    USE dbcsr_toollib,                   ONLY: ordered_search
    USE dbcsr_types,                     ONLY: &
         dbcsr_1d_array_type, dbcsr_2d_array_obj, dbcsr_data_obj, dbcsr_distribution_obj, &
@@ -1278,7 +1279,7 @@ CONTAINS
          CALL timestop(handle2)
          ! Delete send data
          CALL dbcsr_data_release(data_send)
-         DEALLOCATE (meta_send)
+         CALL memory_deallocate(meta_send, memtype_mpi_buffer)
 !$OMP END MASTER
       ENDIF
 !$OMP BARRIER
@@ -1474,7 +1475,8 @@ CONTAINS
       !
       IF (do_virt .OR. ((do_symmetry .OR. transpose) .AND. .NOT. is_diagonal)) THEN
          CALL dbcsr_data_release(data_recv)
-         DEALLOCATE (meta_recv, recv_refs)
+         CALL memory_deallocate(meta_recv, memtype_mpi_buffer)
+         DEALLOCATE (recv_refs)
       ENDIF
       IF (is_left) THEN
          NULLIFY (local_g2l_map_rows)
@@ -1797,13 +1799,13 @@ CONTAINS
          ithread, ivirt_k, left_col_mult, left_col_nimages, left_col_total_nimages, &
          left_data_size, left_meta_size, left_myfirstvcol, left_myfirstvrow, left_mypcol, &
          left_myprow, left_npcols, left_nprows, left_nrequests, left_row_mult, left_row_nimages, &
-         min_nimages, mycol3D, mynode, mypcol, myprow, myrank3D, myrow3D, nblkrows_local, ncols3D
-      INTEGER :: nleft_buffers, nranks3D, nright_buffers, nrows3D, nthreads, numnodes, nvirt_k, &
-         recv_vcol, recv_vrow, request_epss, request_keep_sparsity, right_col_mult, &
-         right_col_nimages, right_data_size, right_meta_size, right_myfirstvcol, &
-         right_myfirstvrow, right_mypcol, right_myprow, right_npcols, right_nprows, &
-         right_nrequests, right_row_mult, right_row_nimages, right_row_total_nimages, row, &
-         shift_k, size_guess, size_guess_init, start_k, v_ki
+         min_nimages, mycol3D, mynode, mypcol, myprow, myrank3D, myrow3D, nblkrows_local, &
+         nbuffers, ncols3D
+      INTEGER :: nranks3D, nrows3D, nthreads, numnodes, nvirt_k, recv_vcol, recv_vrow, &
+         request_epss, request_keep_sparsity, right_col_mult, right_col_nimages, right_data_size, &
+         right_meta_size, right_myfirstvcol, right_myfirstvrow, right_mypcol, right_myprow, &
+         right_npcols, right_nprows, right_nrequests, right_row_mult, right_row_nimages, &
+         right_row_total_nimages, row, shift_k, size_guess, size_guess_init, start_k, v_ki
       INTEGER(KIND=int_8)                                :: mem
       INTEGER, ALLOCATABLE, DIMENSION(:)                 :: left_vrow, product_matrix_epss_displ, &
                                                             product_matrix_epss_size, &
@@ -2146,22 +2148,24 @@ CONTAINS
       right_meta_size = right_meta_size+dbcsr_num_slots-dbcsr_slot_nblks
       !
       IF (nvirt_k .EQ. 1) THEN
-         nright_buffers = 1
-         nleft_buffers = 1
+         nbuffers = 1
       ELSEIF (nrows3D .NE. ncols3D .OR. nranks3D .EQ. 1) THEN
-         nright_buffers = 2
-         nleft_buffers = 2
+         nbuffers = 2
       ELSE
-         nright_buffers = ncols3D
-         nleft_buffers = nrows3D
+         ! nrows3D==ncols3D
+         nbuffers = nrows3D
       ENDIF
       !
       ! update capacity of memory-pools
       IF (has_acc) THEN
          CALL dbcsr_mempool_limit_capacity(memtype_abpanel_1%pool, &
-                                           capacity=nranks3D+1)
+                                           capacity=nbuffers)
          CALL dbcsr_mempool_limit_capacity(memtype_abpanel_2%pool, &
-                                           capacity=nranks3D+1)
+                                           capacity=nbuffers)
+         CALL dbcsr_mempool_limit_capacity(memtype_trsbuffer_1%pool, &
+                                           capacity=nbuffers/2+MOD(nbuffers, 2))
+         CALL dbcsr_mempool_limit_capacity(memtype_trsbuffer_2%pool, &
+                                           capacity=nbuffers/2+MOD(nbuffers, 2))
       ENDIF
       !
       ! Prepare buffers for computation
@@ -2170,13 +2174,13 @@ CONTAINS
          CALL buffer_init(buffers_2%right, data_type, &
                           right_data_size, &
                           right_meta_size, &
-                          num_data=(nright_buffers/2), &
+                          num_data=(nbuffers/2), &
                           data_memory_type=memtype_abpanel_2)
          ! Left
          CALL buffer_init(buffers_2%left, data_type, &
                           left_data_size, &
                           left_meta_size, &
-                          num_data=(nleft_buffers/2), &
+                          num_data=(nbuffers/2), &
                           data_memory_type=memtype_abpanel_2)
       ENDIF
       !
@@ -2185,21 +2189,21 @@ CONTAINS
       CALL buffer_init(buffers_1%right, data_type, &
                        right_data_size, &
                        right_meta_size, &
-                       num_data=(nright_buffers-nright_buffers/2), &
+                       num_data=(nbuffers-nbuffers/2), &
                        data_memory_type=memtype_abpanel_1)
       ! Left
       CALL buffer_init(buffers_1%left, data_type, &
                        left_data_size, &
                        left_meta_size, &
-                       num_data=(nleft_buffers-nleft_buffers/2), &
+                       num_data=(nbuffers-nbuffers/2), &
                        data_memory_type=memtype_abpanel_1)
       !
       CALL setup_buffers(buffers_1%right, buffers_2%right, &
-                         right_buffers, nright_buffers, &
+                         right_buffers, nbuffers, &
                          right_meta_size, matrix_right, &
                          imgdist_right)
       CALL setup_buffers(buffers_1%left, buffers_2%left, &
-                         left_buffers, nleft_buffers, &
+                         left_buffers, nbuffers, &
                          left_meta_size, matrix_left, &
                          imgdist_left)
       !
@@ -2237,16 +2241,16 @@ CONTAINS
       !
       ! Preallocate norms arrays
       IF (otf_filtering) THEN
-         ALLOCATE (right_norms(right_meta_size/3, 1, nright_buffers))
-         ALLOCATE (left_norms(left_meta_size/3, 1, nleft_buffers))
+         ALLOCATE (right_norms(right_meta_size/3, 1, nbuffers))
+         ALLOCATE (left_norms(left_meta_size/3, 1, nbuffers))
          IF (do_layers3D .AND. nrows3D .GT. 1) THEN
             CALL mp_wait(request_epss)
             DEALLOCATE (row_max_epss)
          ENDIF
       ELSE
          ! The array must be valid when passed to called subroutines.
-         ALLOCATE (right_norms(0, 1, nright_buffers))
-         ALLOCATE (left_norms(0, 1, nleft_buffers))
+         ALLOCATE (right_norms(0, 1, nbuffers))
+         ALLOCATE (left_norms(0, 1, nbuffers))
       ENDIF
       !
       IF (do_layers3D .AND. keep_sparsity) CALL mp_wait(request_keep_sparsity)
@@ -2331,11 +2335,11 @@ CONTAINS
             !
             ! Set coordinates
             IF (do_comm_right(icol3D)) THEN
-               iright_buffer_comm = MOD(iright_buffer_comm, nright_buffers)+1
+               iright_buffer_comm = MOD(iright_buffer_comm, nbuffers)+1
             ENDIF
             right_buffers(iright_buffer_comm)%coord3D = icol3D
             IF (do_comm_left(irow3D) .OR. nrows3D .GT. 1) THEN
-               ileft_buffer_comm = MOD(ileft_buffer_comm, nleft_buffers)+1
+               ileft_buffer_comm = MOD(ileft_buffer_comm, nbuffers)+1
             ENDIF
             left_buffers(ileft_buffer_comm)%coord3D = irow3D
             !
@@ -2835,13 +2839,13 @@ CONTAINS
       CALL dbcsr_data_release(data_get)
       !
       ! clean-up of communication buffers
-      DO ileft_buffer_comm = 1, nleft_buffers
+      DO ileft_buffer_comm = 1, nbuffers
          DEALLOCATE (left_buffers(ileft_buffer_comm)%data)
          CALL dbcsr_destroy_array(left_buffers(ileft_buffer_comm)%buffer)
          DEALLOCATE (left_buffers(ileft_buffer_comm)%offset)
          DEALLOCATE (left_buffers(ileft_buffer_comm)%get_requests)
       ENDDO
-      DO iright_buffer_comm = 1, nright_buffers
+      DO iright_buffer_comm = 1, nbuffers
          DEALLOCATE (right_buffers(iright_buffer_comm)%data)
          CALL dbcsr_destroy_array(right_buffers(iright_buffer_comm)%buffer)
          DEALLOCATE (right_buffers(iright_buffer_comm)%offset)
@@ -5260,16 +5264,16 @@ CONTAINS
       CALL buffer_release(buffers_orig%left)
       !
       IF (ASSOCIATED(meta_scatter)) THEN
-         DEALLOCATE (meta_scatter)
+         CALL memory_deallocate(meta_scatter, memtype_mpi_buffer)
          NULLIFY (meta_scatter)
       ENDIF
       IF (ASSOCIATED(local_meta_scatter)) THEN
-         DEALLOCATE (local_meta_scatter)
+         CALL memory_deallocate(local_meta_scatter, memtype_mpi_buffer)
          NULLIFY (local_meta_scatter)
          CALL dbcsr_data_release(local_data_scatter)
       ENDIF
       IF (ASSOCIATED(local_meta_product_scatter)) THEN
-         DEALLOCATE (local_meta_product_scatter)
+         CALL memory_deallocate(local_meta_product_scatter, memtype_mpi_buffer)
          NULLIFY (local_meta_product_scatter)
       ENDIF
       IF (dbcsr_data_valid(local_data_product_scatter)) THEN
@@ -5309,11 +5313,11 @@ CONTAINS
          buffer%is_valid = .FALSE.
       ENDIF
       IF (ASSOCIATED(buffer%meta)) THEN
-         DEALLOCATE (buffer%meta)
+         CALL memory_deallocate(buffer%meta, memtype_mpi_buffer)
          NULLIFY (buffer%meta)
       ENDIF
       IF (ASSOCIATED(buffer%meta_diag)) THEN
-         DEALLOCATE (buffer%meta_diag)
+         CALL memory_deallocate(buffer%meta_diag, memtype_mpi_buffer)
          NULLIFY (buffer%meta_diag)
       ENDIF
       IF (ALLOCATED(buffer%offset)) DEALLOCATE (buffer%offset)
