@@ -32,16 +32,16 @@ MODULE dbcsr_mm_csr
                                               dbcsr_internal_error,&
                                               dbcsr_wrong_args_error
    USE dbcsr_mm_sched,                  ONLY: &
-        dbcsr_mm_sched_barrier, dbcsr_mm_sched_begin_burst, dbcsr_mm_sched_end_burst, &
-        dbcsr_mm_sched_finalize, dbcsr_mm_sched_init, dbcsr_mm_sched_lib_finalize, &
-        dbcsr_mm_sched_lib_init, dbcsr_mm_sched_phaseout, dbcsr_mm_sched_process, &
-        dbcsr_mm_sched_red3D_init, dbcsr_mm_sched_set_orig_datasize, dbcsr_mm_sched_type
+        dbcsr_mm_sched_barrier, dbcsr_mm_sched_begin_burst, dbcsr_mm_sched_dev2host_init, &
+        dbcsr_mm_sched_end_burst, dbcsr_mm_sched_finalize, dbcsr_mm_sched_init, &
+        dbcsr_mm_sched_lib_finalize, dbcsr_mm_sched_lib_init, dbcsr_mm_sched_phaseout, &
+        dbcsr_mm_sched_process, dbcsr_mm_sched_set_orig_datasize, dbcsr_mm_sched_type
    USE dbcsr_mm_types,                  ONLY: &
         dbcsr_ps_width, p_a_first, p_b_first, p_c_blk, p_c_first, p_k, p_m, p_n, &
         stack_descriptor_type
    USE dbcsr_ptr_util,                  ONLY: ensure_array_size
    USE dbcsr_toollib,                   ONLY: sort
-   USE dbcsr_types,                     ONLY: dbcsr_obj,&
+   USE dbcsr_types,                     ONLY: dbcsr_data_obj,&
                                               dbcsr_type,&
                                               dbcsr_work_type
    USE dbcsr_util,                      ONLY: map_most_common
@@ -94,7 +94,7 @@ MODULE dbcsr_mm_csr
    PUBLIC :: dbcsr_mm_csr_phaseout
    PUBLIC :: dbcsr_mm_csr_init, dbcsr_mm_csr_finalize
    PUBLIC :: dbcsr_mm_csr_multiply, dbcsr_mm_csr_purge_stacks
-   PUBLIC :: dbcsr_mm_csr_red3D_init, dbcsr_mm_csr_red3D
+   PUBLIC :: dbcsr_mm_csr_dev2host_init, dbcsr_mm_csr_red3D
 
 CONTAINS
 
@@ -744,18 +744,19 @@ CONTAINS
 !> \param this ...
 !> \author Alfio Lazzaro
 ! **************************************************************************************************
-   SUBROUTINE dbcsr_mm_csr_red3D_init(this)
+   SUBROUTINE dbcsr_mm_csr_dev2host_init(this)
       TYPE(dbcsr_mm_csr_type), INTENT(INOUT)             :: this
 
-      CALL dbcsr_mm_sched_red3D_init(this%sched)
+      CALL dbcsr_mm_sched_dev2host_init(this%sched)
 
-   END SUBROUTINE dbcsr_mm_csr_red3D_init
+   END SUBROUTINE dbcsr_mm_csr_dev2host_init
 
 ! **************************************************************************************************
 !> \brief Make the reduction of the 3D layers in the local csr object
 !>
 !> \param this ...
-!> \param matrix_other ...
+!> \param meta_buffer ...
+!> \param data_buffer ...
 !> \param flop ...
 !> \param m_sizes ...
 !> \param n_sizes ...
@@ -765,11 +766,12 @@ CONTAINS
 !> \param keep_sparsity ...
 !> \author Alfio Lazzaro
 ! **************************************************************************************************
-   SUBROUTINE dbcsr_mm_csr_red3D(this, matrix_other, flop, m_sizes, n_sizes, &
+   SUBROUTINE dbcsr_mm_csr_red3D(this, meta_buffer, data_buffer, flop, m_sizes, n_sizes, &
                                  g2l_map_rows, g2l_map_cols, original_lastblk, &
                                  keep_sparsity)
       TYPE(dbcsr_mm_csr_type), INTENT(INOUT)             :: this
-      TYPE(dbcsr_obj), INTENT(IN)                        :: matrix_other
+      INTEGER, DIMENSION(:), INTENT(IN), TARGET          :: meta_buffer
+      TYPE(dbcsr_data_obj), INTENT(IN)                   :: data_buffer
       INTEGER(KIND=int_8), INTENT(INOUT)                 :: flop
       INTEGER, DIMENSION(:), INTENT(IN)                  :: m_sizes, n_sizes, g2l_map_rows, &
                                                             g2l_map_cols
@@ -784,13 +786,13 @@ CONTAINS
 
       ithread = 0; nthreads = 1
 !$    ithread = OMP_GET_THREAD_NUM(); nthreads = OMP_GET_NUM_THREADS()
-      lb_meta = matrix_other%m%index(ithread+1)
-      nblocks = (matrix_other%m%index(ithread+2)-lb_meta)/3
+      lb_meta = meta_buffer(ithread+1)
+      nblocks = (meta_buffer(ithread+2)-lb_meta)/3
       ub_meta = lb_meta+nblocks
-      row_i => matrix_other%m%index(lb_meta+1:ub_meta)
+      row_i => meta_buffer(lb_meta+1:ub_meta)
       lb_meta = ub_meta
       ub_meta = lb_meta+nblocks
-      col_i => matrix_other%m%index(lb_meta+1:ub_meta)
+      col_i => meta_buffer(lb_meta+1:ub_meta)
       ! Make local indexing if needed
       IF (keep_sparsity) THEN
          DO iblock = 1, original_lastblk
@@ -800,7 +802,7 @@ CONTAINS
       ENDIF
       lb_meta = ub_meta
       ub_meta = lb_meta+nblocks
-      blk_p => matrix_other%m%index(lb_meta+1:ub_meta)
+      blk_p => meta_buffer(lb_meta+1:ub_meta)
       !
       ! Get sizes
       nze_max = this%product_wm%datasize
@@ -826,12 +828,12 @@ CONTAINS
       DO iblock = 1, nblocks
          nze = m_sizes(row_i(iblock))*n_sizes(col_i(iblock))
          IF (nze .EQ. 0) CYCLE
-         lb_data = blk_p(iblock)+matrix_other%m%index(nthreads+ithread+2)
+         lb_data = blk_p(iblock)+meta_buffer(nthreads+ithread+2)
          c_blk_id = hash_table_get(this%c_hashes(row_i(iblock)), col_i(iblock))
          block_exists = c_blk_id .GT. 0
          IF (block_exists) THEN
             lb = this%product_wm%blk_p(c_blk_id)
-            CALL block_add(this%product_wm%data_area, matrix_other%m%data_area, &
+            CALL block_add(this%product_wm%data_area, data_buffer, &
                            lb, lb_data, nze)
             flop = flop+nze
          ELSE
@@ -844,7 +846,7 @@ CONTAINS
             this%product_wm%col_i(this%product_wm%lastblk) = col_i(iblock)
             this%product_wm%blk_p(this%product_wm%lastblk) = lb
             !
-            CALL dbcsr_block_copy_aa(this%product_wm%data_area, matrix_other%m%data_area, &
+            CALL dbcsr_block_copy_aa(this%product_wm%data_area, data_buffer, &
                                      m_sizes(row_i(iblock)), n_sizes(col_i(iblock)), lb, lb_data)
          ENDIF
       ENDDO
