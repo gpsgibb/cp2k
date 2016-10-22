@@ -30,14 +30,15 @@
 !> \param[in] zero_pad        (optional) zero new allocations; default is to
 !>                            write nothing
 ! **************************************************************************************************
-  SUBROUTINE ensure_array_size_[nametype1](array, lb, ub, factor,&
+  SUBROUTINE ensure_array_size_[nametype1](array, array_resize, lb, ub, factor,&
        nocopy, memory_type, zero_pad)
     [type1], DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: array
-    INTEGER, INTENT(IN), OPTIONAL                      :: lb
-    INTEGER, INTENT(IN)                                :: ub
-    REAL(KIND=dp), INTENT(IN), OPTIONAL                :: factor
-    LOGICAL, INTENT(IN), OPTIONAL                      :: nocopy, zero_pad
-    TYPE(dbcsr_memtype_type), INTENT(IN), OPTIONAL     :: memory_type
+    [type1], DIMENSION(:), POINTER, OPTIONAL CP_COMMA_CONTIGUOUS :: array_resize
+    INTEGER, INTENT(IN), OPTIONAL                  :: lb
+    INTEGER, INTENT(IN)                            :: ub
+    REAL(KIND=dp), INTENT(IN), OPTIONAL            :: factor
+    LOGICAL, INTENT(IN), OPTIONAL                  :: nocopy, zero_pad
+    TYPE(dbcsr_memtype_type), INTENT(IN), OPTIONAL :: memory_type
 
     CHARACTER(len=*), PARAMETER :: routineN = 'ensure_array_size_[nametype1]', &
       routineP = moduleN//':'//routineN
@@ -53,6 +54,8 @@
 !   ---------------------------------------------------------------------------
     !CALL timeset(routineN, error_handler)
     dbg = .FALSE.
+
+    IF (PRESENT(array_resize)) NULLIFY(array_resize)
 
     IF (PRESENT (nocopy)) THEN
        docopy = .NOT. nocopy
@@ -70,9 +73,8 @@
     IF (PRESENT (zero_pad)) pad = zero_pad
     !> Creates a new array if it doesn't yet exist.
     IF (.NOT.ASSOCIATED(array)) THEN
-       CALL dbcsr_assert (lb_new, "EQ", 1, &
-            dbcsr_fatal_level, dbcsr_unimplemented_error_nr, routineN,&
-            "Arrays must start at 1", __LINE__)
+       IF(lb_new /= 1) &
+          CPABORT("Arrays must start at 1")
        CALL mem_alloc_[nametype1] (array, ub, mem_type=mem_type)
        IF (pad .AND. ub .GT. 0) CALL mem_zero_[nametype1] (array, ub)
        !CALL timestop(error_handler)
@@ -116,13 +118,17 @@
     !
     ! Deallocates the old array if it's not needed to copy the old data.
     IF(.NOT.docopy) THEN
-       CALL mem_dealloc_[nametype1] (array, mem_type=mem_type)
+       IF (PRESENT(array_resize)) THEN
+          array_resize => array
+          NULLIFY(array)
+       ELSE
+          CALL mem_dealloc_[nametype1] (array, mem_type=mem_type)
+       ENDIF
     ENDIF
     !
     ! Allocates the new array
-    CALL dbcsr_assert (lb_new, "EQ", 1, &
-         dbcsr_fatal_level, dbcsr_unimplemented_error_nr, routineN,&
-         "Arrays must start at 1", __LINE__)
+    IF(lb_new /= 1) &
+       CPABORT("Arrays must start at 1")
     CALL mem_alloc_[nametype1] (newarray, ub_new-lb_new+1, mem_type)
     !
     ! Now copy and/or zero pad.
@@ -140,7 +146,12 @@
           !newarray(ub_orig+1:ub_new) = 0
           CALL mem_zero_[nametype1] (newarray(ub_orig+1:ub_new), ub_new-(ub_orig+1)+1)
        ENDIF
-       CALL mem_dealloc_[nametype1] (array, mem_type=mem_type)
+       IF (PRESENT(array_resize)) THEN
+          array_resize => array
+          NULLIFY(array)
+       ELSE
+          CALL mem_dealloc_[nametype1] (array, mem_type=mem_type)
+       ENDIF
     ELSEIF (pad) THEN
        !newarray(:) = [zero1]
        CALL mem_zero_[nametype1] (newarray, SIZE(newarray))

@@ -11,7 +11,7 @@
 !> \retval view new pointer
 ! **************************************************************************************************
   FUNCTION pointer_view_z (original, lb, ub) RESULT (view)
-    COMPLEX(kind=real_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: original, view
+    COMPLEX(kind=real_8), DIMENSION(:), POINTER :: original, view
     INTEGER, INTENT(IN)                  :: lb, ub
     view => original(lb:ub)
   END FUNCTION pointer_view_z
@@ -30,29 +30,32 @@
 !> \param[in] zero_pad        (optional) zero new allocations; default is to
 !>                            write nothing
 ! **************************************************************************************************
-  SUBROUTINE ensure_array_size_z(array, lb, ub, factor,&
+  SUBROUTINE ensure_array_size_z(array, array_resize, lb, ub, factor,&
        nocopy, memory_type, zero_pad)
-    COMPLEX(kind=real_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: array
-    INTEGER, INTENT(IN), OPTIONAL                      :: lb
-    INTEGER, INTENT(IN)                                :: ub
-    REAL(KIND=dp), INTENT(IN), OPTIONAL                :: factor
-    LOGICAL, INTENT(IN), OPTIONAL                      :: nocopy, zero_pad
-    TYPE(dbcsr_memtype_type), INTENT(IN), OPTIONAL     :: memory_type
+    COMPLEX(kind=real_8), DIMENSION(:), POINTER                 :: array
+    COMPLEX(kind=real_8), DIMENSION(:), POINTER, OPTIONAL       :: array_resize
+    INTEGER, INTENT(IN), OPTIONAL                  :: lb
+    INTEGER, INTENT(IN)                            :: ub
+    REAL(KIND=dp), INTENT(IN), OPTIONAL            :: factor
+    LOGICAL, INTENT(IN), OPTIONAL                  :: nocopy, zero_pad
+    TYPE(dbcsr_memtype_type), INTENT(IN), OPTIONAL :: memory_type
 
     CHARACTER(len=*), PARAMETER :: routineN = 'ensure_array_size_z', &
       routineP = moduleN//':'//routineN
 
-    INTEGER                                            :: lb_new, lb_orig, &
-                                                          ub_new, ub_orig, &
-                                                          size_increase, &
-                                                          old_size
-    TYPE(dbcsr_memtype_type)                           :: mem_type
-    LOGICAL                                            :: dbg, docopy, pad
-    COMPLEX(kind=real_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: newarray
+    INTEGER                                  :: lb_new, lb_orig, &
+                                                ub_new, ub_orig, old_size,&
+                                                size_increase
+    TYPE(dbcsr_memtype_type)                 :: mem_type
+    LOGICAL                                  :: dbg, docopy, &
+                                                pad
+    COMPLEX(kind=real_8), DIMENSION(:), POINTER           :: newarray
 
 !   ---------------------------------------------------------------------------
     !CALL timeset(routineN, error_handler)
     dbg = .FALSE.
+
+    IF (PRESENT(array_resize)) NULLIFY(array_resize)
 
     IF (PRESENT (nocopy)) THEN
        docopy = .NOT. nocopy
@@ -70,9 +73,8 @@
     IF (PRESENT (zero_pad)) pad = zero_pad
     !> Creates a new array if it doesn't yet exist.
     IF (.NOT.ASSOCIATED(array)) THEN
-       CALL dbcsr_assert (lb_new, "EQ", 1, &
-            dbcsr_fatal_level, dbcsr_unimplemented_error_nr, routineN,&
-            "Arrays must start at 1", __LINE__)
+       IF(lb_new /= 1) &
+          CPABORT("Arrays must start at 1")
        CALL mem_alloc_z (array, ub, mem_type=mem_type)
        IF (pad .AND. ub .GT. 0) CALL mem_zero_z (array, ub)
        !CALL timestop(error_handler)
@@ -116,13 +118,17 @@
     !
     ! Deallocates the old array if it's not needed to copy the old data.
     IF(.NOT.docopy) THEN
-       CALL mem_dealloc_z (array, mem_type=mem_type)
+       IF (PRESENT(array_resize)) THEN
+          array_resize => array
+          NULLIFY(array)
+       ELSE
+          CALL mem_dealloc_z (array, mem_type=mem_type)
+       ENDIF
     ENDIF
     !
     ! Allocates the new array
-    CALL dbcsr_assert (lb_new, "EQ", 1, &
-         dbcsr_fatal_level, dbcsr_unimplemented_error_nr, routineN,&
-         "Arrays must start at 1", __LINE__)
+    IF(lb_new /= 1) &
+       CPABORT("Arrays must start at 1")
     CALL mem_alloc_z (newarray, ub_new-lb_new+1, mem_type)
     !
     ! Now copy and/or zero pad.
@@ -140,7 +146,12 @@
           !newarray(ub_orig+1:ub_new) = 0
           CALL mem_zero_z (newarray(ub_orig+1:ub_new), ub_new-(ub_orig+1)+1)
        ENDIF
-       CALL mem_dealloc_z (array, mem_type=mem_type)
+       IF (PRESENT(array_resize)) THEN
+          array_resize => array
+          NULLIFY(array)
+       ELSE
+          CALL mem_dealloc_z (array, mem_type=mem_type)
+       ENDIF
     ELSEIF (pad) THEN
        !newarray(:) = CMPLX(0.0, 0.0, real_8)
        CALL mem_zero_z (newarray, SIZE(newarray))
@@ -186,12 +197,12 @@
 !> \param[in] mem_type    memory type
 ! **************************************************************************************************
   SUBROUTINE mem_alloc_z (mem, n, mem_type)
-    COMPLEX(kind=real_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: mem
-    INTEGER, INTENT(IN)                                :: n
-    TYPE(dbcsr_memtype_type), INTENT(IN)               :: mem_type
+    COMPLEX(kind=real_8), DIMENSION(:), POINTER        :: mem
+    INTEGER, INTENT(IN)                   :: n
+    TYPE(dbcsr_memtype_type), INTENT(IN)  :: mem_type
     CHARACTER(len=*), PARAMETER :: routineN = 'mem_alloc_z', &
       routineP = moduleN//':'//routineN
-    INTEGER                                            :: error_handle
+    INTEGER                               :: error_handle
 !   ---------------------------------------------------------------------------
 
     IF (careful_mod) &
@@ -251,11 +262,11 @@
 !> \param[in] mem_type    memory type
 ! **************************************************************************************************
   SUBROUTINE mem_dealloc_z (mem, mem_type)
-    COMPLEX(kind=real_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: mem
-    TYPE(dbcsr_memtype_type), INTENT(IN)               :: mem_type
+    COMPLEX(kind=real_8), DIMENSION(:), POINTER        :: mem
+    TYPE(dbcsr_memtype_type), INTENT(IN)  :: mem_type
     CHARACTER(len=*), PARAMETER :: routineN = 'mem_dealloc_z', &
       routineP = moduleN//':'//routineN
-    INTEGER                                            :: error_handle
+    INTEGER                               :: error_handle
 !   ---------------------------------------------------------------------------
 
     IF (careful_mod) &
