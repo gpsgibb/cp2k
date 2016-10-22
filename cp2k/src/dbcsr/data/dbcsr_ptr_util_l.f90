@@ -11,7 +11,7 @@
 !> \retval view new pointer
 ! **************************************************************************************************
   FUNCTION pointer_view_l (original, lb, ub) RESULT (view)
-    INTEGER(kind=int_8), DIMENSION(:), POINTER :: original, view
+    INTEGER(kind=int_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: original, view
     INTEGER, INTENT(IN)                  :: lb, ub
     view => original(lb:ub)
   END FUNCTION pointer_view_l
@@ -32,8 +32,8 @@
 ! **************************************************************************************************
   SUBROUTINE ensure_array_size_l(array, array_resize, lb, ub, factor,&
        nocopy, memory_type, zero_pad)
-    INTEGER(kind=int_8), DIMENSION(:), POINTER                 :: array
-    INTEGER(kind=int_8), DIMENSION(:), POINTER, OPTIONAL       :: array_resize
+    INTEGER(kind=int_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: array
+    INTEGER(kind=int_8), DIMENSION(:), POINTER, OPTIONAL CP_COMMA_CONTIGUOUS :: array_resize
     INTEGER, INTENT(IN), OPTIONAL                  :: lb
     INTEGER, INTENT(IN)                            :: ub
     REAL(KIND=dp), INTENT(IN), OPTIONAL            :: factor
@@ -43,13 +43,13 @@
     CHARACTER(len=*), PARAMETER :: routineN = 'ensure_array_size_l', &
       routineP = moduleN//':'//routineN
 
-    INTEGER                                  :: lb_new, lb_orig, &
-                                                ub_new, ub_orig, old_size,&
-                                                size_increase
-    TYPE(dbcsr_memtype_type)                 :: mem_type
-    LOGICAL                                  :: dbg, docopy, &
-                                                pad
-    INTEGER(kind=int_8), DIMENSION(:), POINTER           :: newarray
+    INTEGER                                            :: lb_new, lb_orig, &
+                                                          ub_new, ub_orig, &
+                                                          size_increase, &
+                                                          old_size
+    TYPE(dbcsr_memtype_type)                           :: mem_type
+    LOGICAL                                            :: dbg, docopy, pad
+    INTEGER(kind=int_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: newarray
 
 !   ---------------------------------------------------------------------------
     !CALL timeset(routineN, error_handler)
@@ -197,12 +197,12 @@
 !> \param[in] mem_type    memory type
 ! **************************************************************************************************
   SUBROUTINE mem_alloc_l (mem, n, mem_type)
-    INTEGER(kind=int_8), DIMENSION(:), POINTER        :: mem
-    INTEGER, INTENT(IN)                   :: n
-    TYPE(dbcsr_memtype_type), INTENT(IN)  :: mem_type
+    INTEGER(kind=int_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: mem
+    INTEGER, INTENT(IN)                                :: n
+    TYPE(dbcsr_memtype_type), INTENT(IN)               :: mem_type
     CHARACTER(len=*), PARAMETER :: routineN = 'mem_alloc_l', &
       routineP = moduleN//':'//routineN
-    INTEGER                               :: error_handle
+    INTEGER                                            :: error_handle
 !   ---------------------------------------------------------------------------
 
     IF (careful_mod) &
@@ -262,11 +262,11 @@
 !> \param[in] mem_type    memory type
 ! **************************************************************************************************
   SUBROUTINE mem_dealloc_l (mem, mem_type)
-    INTEGER(kind=int_8), DIMENSION(:), POINTER        :: mem
-    TYPE(dbcsr_memtype_type), INTENT(IN)  :: mem_type
+    INTEGER(kind=int_8), DIMENSION(:), POINTER CP_COMMA_CONTIGUOUS :: mem
+    TYPE(dbcsr_memtype_type), INTENT(IN)               :: mem_type
     CHARACTER(len=*), PARAMETER :: routineN = 'mem_dealloc_l', &
       routineP = moduleN//':'//routineN
-    INTEGER                               :: error_handle
+    INTEGER                                            :: error_handle
 !   ---------------------------------------------------------------------------
 
     IF (careful_mod) &
