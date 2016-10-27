@@ -114,8 +114,8 @@ LIBXSMM_ACC_EXTERN
 void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_mm_driver)(const int*);
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_mm_driver)(const int* driver)
 {
-#if defined(MKL_ENABLE_AVX512_MIC) // only necessary for the version carrying KNL support for the first time
-  mkl_enable_instructions(MKL_ENABLE_AVX512_MIC);
+#if defined(MKL_ENABLE_AVX512) // only necessary for the version carrying KNL support for the first time
+  mkl_enable_instructions(MKL_ENABLE_AVX512);
 #endif
 #if defined(__LIBXSMM)
   // eventually pre-generate dispatch tables for any static code
@@ -156,15 +156,10 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
 #endif
   }
 
-  const char *const dense_mult_env = getenv("CP2K_DENSE");
-  int dense_mult = (dense_mult_env && *dense_mult_env) ? atoi(dense_mult_env) : -1;
-
   if (libxsmm_acc_private::reconfigure) {
 #if defined(__TBBMALLOC)
     scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
 #endif
-    if (0 > dense_mult) dense_mult = 0;
-
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
 # if defined(LIBXSMM_ACC_ACCDRV_POSTERIOR_STREAMS)
     extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_posterior_streams);
@@ -188,12 +183,6 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
 # endif
 #endif
   }
-#if 0 // check if disabling densification is still beneficial after Cannon rework
-  if (0 <= dense_mult) {
-    extern int LIBXSMM_ACC_FSYMBOL(dbcsr_mm_cannon_mp_dense_mult_default);
-    LIBXSMM_ACC_FSYMBOL(dbcsr_mm_cannon_mp_dense_mult_default) = dense_mult;
-  }
-#endif
 }
 
 
@@ -232,7 +221,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
       myvalue = atoi(env);
     }
     else if (libxsmm_acc_private::reconfigure) {
-      myvalue = 1;
+      myvalue = 0;
     }
   }
   LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(&myvalue);
@@ -244,8 +233,8 @@ LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
 # else
 LIBXSMM_ACC_EXTERN
 # endif
-void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_rma)(const int*);
-LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_use_mpi_rma)(const int* value)
+void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(const int*);
+LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(const int* value)
 {
   LIBXSMM_ACC_ASSERT(value);
   int myvalue = *value;
@@ -256,11 +245,11 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
       myvalue = atoi(env);
     }
     else if (libxsmm_acc_private::reconfigure) {
-      myvalue = 0;
+      myvalue = 1;
     }
   }
 #endif
-  LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_rma)(&myvalue);
+  LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(&myvalue);
 }
 
 
