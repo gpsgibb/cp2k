@@ -217,29 +217,6 @@ LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
 # else
 LIBXSMM_ACC_EXTERN
 # endif
-void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(const int*);
-LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(const int* value)
-{
-  LIBXSMM_ACC_ASSERT(value);
-  int myvalue = *value;
-  if (!libxsmm_acc_private::explicit_configure || libxsmm_acc_private::reconfigure) {
-    const char *const env = getenv("CP2K_FILTERING");
-    if (env && *env) {
-      myvalue = atoi(env);
-    }
-    else if (libxsmm_acc_private::reconfigure) {
-      myvalue = 0;
-    }
-  }
-  LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(&myvalue);
-}
-
-
-# if defined(__GNUC__)
-LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
-# else
-LIBXSMM_ACC_EXTERN
-# endif
 void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(const int*);
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(const int* value)
 {
@@ -247,12 +224,12 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
   int myvalue = *value;
 #if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
   if (!libxsmm_acc_private::explicit_configure || libxsmm_acc_private::reconfigure) {
+    LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(const int*);
     const char *const env = getenv("CP2K_RMA");
+    const int disable = 0;
     if (env && *env) {
+      LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(&disable);
       myvalue = atoi(env);
-    }
-    else if (libxsmm_acc_private::reconfigure) {
-      myvalue = 1;
     }
   }
 #endif
