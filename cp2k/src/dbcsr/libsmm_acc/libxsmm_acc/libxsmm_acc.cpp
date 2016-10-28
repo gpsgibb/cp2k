@@ -17,6 +17,9 @@
 #endif
 #include <iostream>
 #include <cstdlib>
+#if defined(_OPENMP)
+# include <omp.h>
+#endif
 #if defined(__MKL) || defined(MKL_DIRECT_CALL_SEQ) || defined(MKL_DIRECT_CALL)
 # include <mkl_service.h>
 #endif
@@ -114,6 +117,10 @@ LIBXSMM_ACC_EXTERN
 void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_mm_driver)(const int*);
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_mm_driver)(const int* driver)
 {
+#if defined(_OPENMP) && defined(KMP_VERSION_MAJOR)
+  // setting the stacksize applies independent of nested parallelism (LIBXSMM_ACC_OPENMP)
+  //kmp_set_stacksize(52428800);
+#endif
 #if defined(MKL_ENABLE_AVX512) // only necessary for the version carrying KNL support for the first time
   mkl_enable_instructions(MKL_ENABLE_AVX512);
 #endif
