@@ -84,6 +84,7 @@ LIBXSMM_ACC_EXTERN void xsmm_acc_abort(const char* filename, int line_number, co
 
 
 #if defined(__RECONFIGURE)
+LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(const int*);
 
 # if defined(__GNUC__)
 LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
@@ -224,7 +225,6 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
   int myvalue = *value;
 #if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
   if (!libxsmm_acc_private::explicit_configure || libxsmm_acc_private::reconfigure) {
-    LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(const int*);
     const char *const env = getenv("CP2K_RMA");
     const int disable = 0;
     if (env && *env) {
