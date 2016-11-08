@@ -166,7 +166,10 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_con
 
   if (libxsmm_acc_private::reconfigure) {
 #if defined(__TBBMALLOC)
-    scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
+    const char *const env = getenv("CP2K_HUGEPAGES");
+    if (0 == env || 0 == *env || 0 != atoi(env)) {
+      scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
+    }
 #endif
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
 # if defined(LIBXSMM_ACC_ACCDRV_POSTERIOR_STREAMS)
