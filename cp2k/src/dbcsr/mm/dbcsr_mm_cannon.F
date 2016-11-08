@@ -1380,6 +1380,15 @@ CONTAINS
             CALL mp_waitall(right_index_rr)
          ENDIF wait_right
          CALL timestop(handle2)
+         !
+         ! Repoint indices of right matrices
+         calc_case_right: IF (metronome .GT. 1) THEN
+            DO v_ki = 0, right_row_nimages-1
+               CALL dbcsr_repoint_index(right_buffer_calc%mats(v_ki+1, 1)%m)
+               right_buffer_calc%mats(v_ki+1, 1)%m%valid = .TRUE.
+            ENDDO
+         ENDIF calc_case_right
+         !
          ! Right matrix transfer. Transfer in all but the last loop
          ! iteration.
          xfer_right: IF (metronome .LT. nsteps_k) THEN
@@ -1487,14 +1496,6 @@ CONTAINS
             ENDDO
          ENDIF xfer_right
          !
-         ! Repoint indices of right matrices
-         calc_case_right: IF (metronome .GT. 1) THEN
-            DO v_ki = 0, right_row_nimages-1
-               CALL dbcsr_repoint_index(right_buffer_calc%mats(v_ki+1, 1)%m)
-               right_buffer_calc%mats(v_ki+1, 1)%m%valid = .TRUE.
-            ENDDO
-         ENDIF calc_case_right
-         !
          ! Wait for left matrix transfer completion. Wait in all but
          ! the first loop iteration.
          CALL timeset(routineN//"_metrocomm3", handle2)
@@ -1506,6 +1507,15 @@ CONTAINS
             CALL mp_waitall(left_index_rr)
          ENDIF wait_left
          CALL timestop(handle2)
+         !
+         ! Repoint indices of left matrices and do the multiplications.
+         calc_case_left: IF (metronome .GT. 1) THEN
+            DO v_ki = 0, left_col_nimages-1
+               CALL dbcsr_repoint_index(left_buffer_calc%mats(1, v_ki+1)%m)
+               left_buffer_calc%mats(1, v_ki+1)%m%valid = .TRUE.
+            ENDDO
+         ENDIF calc_case_left
+         !
          ! Left matrix transfer. Transfer in all but the last loop
          ! iteration.
          xfer_left: IF (metronome .LT. nsteps_k) THEN
@@ -1611,14 +1621,6 @@ CONTAINS
                CALL timestop(handle2)
             ENDDO
          ENDIF xfer_left
-         !
-         ! Repoint indices of left matrices and do the multiplications.
-         calc_case_left: IF (metronome .GT. 1) THEN
-            DO v_ki = 0, left_col_nimages-1
-               CALL dbcsr_repoint_index(left_buffer_calc%mats(1, v_ki+1)%m)
-               left_buffer_calc%mats(1, v_ki+1)%m%valid = .TRUE.
-            ENDDO
-         ENDIF calc_case_left
 
          CALL timeset(routineN//"_multrec", handle2)
          DO v_ki = 0, min_nimages-1
