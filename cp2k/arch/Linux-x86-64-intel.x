@@ -325,6 +325,9 @@ ifneq (,$(LIBXSMMROOT))
 
     # substitute "big" xGEMM calls with LIBXSMM
     ifeq (1,$(shell echo $$((1 < $(LIBXSMM)))))
+      ifeq (1,$(shell echo $$((2 < $(LIBXSMM)))))
+        DFLAGS += -D__LIBXSMM_TRANS
+      endif
       LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
       LDFLAGS += -Wl,--wrap=sgemm_,--wrap=dgemm_
       WRAP ?= $(shell echo $$(($(LIBXSMM) - 1)))
