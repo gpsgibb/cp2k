@@ -329,8 +329,12 @@ ifneq (,$(LIBXSMMROOT))
         DFLAGS += -D__LIBXSMM_TRANS
       endif
       LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
-      LDFLAGS += -Wl,--wrap=sgemm_,--wrap=dgemm_
-      WRAP ?= $(shell echo $$(($(LIBXSMM) - 1)))
+      WRAP ?= 1
+      ifeq (2,$(WRAP))
+        LDFLAGS += -Wl,--wrap=dgemm_
+      else
+        LDFLAGS += -Wl,--wrap=sgemm_,--wrap=dgemm_
+      endif
       ifeq (0,$(OMP))
         ifeq (1,$(MKL))
           LIBS += -liomp5
