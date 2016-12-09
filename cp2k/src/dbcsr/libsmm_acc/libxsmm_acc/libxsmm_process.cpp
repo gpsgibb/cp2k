@@ -92,31 +92,11 @@ private:
     const T *LIBXSMM_ACC_RESTRICT, const T *LIBXSMM_ACC_RESTRICT, T *LIBXSMM_ACC_RESTRICT,
     const T*, const T*, const T*);
 
-  static int prefetch() {
-    switch (libxsmm_acc_prefetch) {
-      case 1: return LIBXSMM_PREFETCH_NONE;
-      case 2: return 0/*LIBXSMM_PREFETCH_SIGONLY*/;
-      case 3: return LIBXSMM_PREFETCH_BL2_VIA_C;
-      case 4: return LIBXSMM_PREFETCH_AL2;
-      case 5: return LIBXSMM_PREFETCH_AL2_AHEAD;
-      case 6: return LIBXSMM_PREFETCH_AL2BL2_VIA_C;
-      case 7: return LIBXSMM_PREFETCH_AL2BL2_VIA_C_AHEAD;
-      case 8: return LIBXSMM_PREFETCH_AL2_JPST;
-      case 9: return LIBXSMM_PREFETCH_AL2BL2_VIA_C_JPST;
-      default:
-#if LIBXSMM_VERSION4(1, 3, 0, 8) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
-        return LIBXSMM_PREFETCH_AUTO;
-#else
-        return LIBXSMM_PREFETCH_NONE;
-#endif
-    }
-  }
-
 public:
   smm_type(U def_mnk, U m, U n, U k)
 #if defined(__LIBXSMM)
     : m_predispatched((0 != def_mnk && (LIBXSMM_MAX_MNK) >= (m * n * k))
-      ? xfunc_type(m, n, k, T(1)/*alpha*/, T(1)/*beta*/, LIBXSMM_FLAGS, prefetch())
+      ? xfunc_type(LIBXSMM_FLAGS, m, n, k, T(1)/*alpha*/, T(1)/*beta*/, LIBXSMM_PREFETCH)
       : xfunc_type())
     , m_function(0 != m_predispatched ? smm_type::xmm/*pre-dispatched*/
       : ((LIBXSMM_MAX_MNK) >= (m * n * k) ? smm_type::amm : smm_type::bmm))
@@ -193,7 +173,7 @@ private:
     const T* pa, const T* pb, const T* pc)
   {
     LIBXSMM_ACC_ASSERT((LIBXSMM_MAX_MNK) >= (m * n * k));
-    const xfunc_type xfunc(m, n, k, T(1)/*alpha*/, T(1)/*beta*/, LIBXSMM_FLAGS, prefetch());
+    const xfunc_type xfunc(LIBXSMM_FLAGS, m, n, k, T(1)/*alpha*/, T(1)/*beta*/, LIBXSMM_PREFETCH);
     if (xfunc) {
 # if (0 != LIBXSMM_PREFETCH || 0 != LIBXSMM_JIT)
       xfunc(a, b, c, pa, pb, pc);
@@ -317,13 +297,7 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
 
 #if defined(LIBXSMM_ACC_SORT)
 const char *const sort_env_str = getenv("CP2K_SORT");
-const int sort_env = (sort_env_str && *sort_env_str) ? atoi(sort_env_str)
-# if defined(__LIBXSMM) && (LIBXSMM_VERSION4(1, 4, 2, 0) <= LIBXSMM_VERSION4( \
-  LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH))
-  : /*(LIBXSMM_X86_AVX512_MIC != libxsmm_get_target_archid() ? 0 : 1)*/0;
-# else
-  : 0;
-# endif
+const int sort_env = ((sort_env_str && *sort_env_str) ? atoi(sort_env_str) : 0);
 
 LIBXSMM_ACC_RETARGETABLE bool less(const libxsmm_acc_param_type& a, const libxsmm_acc_param_type& b)
 {
