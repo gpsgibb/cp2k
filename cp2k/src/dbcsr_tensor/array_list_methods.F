@@ -3,6 +3,11 @@
 !   Copyright (C) 2000 - 2016  CP2K developers group                                               !
 !--------------------------------------------------------------------------------------------------!
 
+!--------------------------------------------------------------------------------------------------!
+! Generated from array_list_methods.fypp using Fypp.                                               !
+! **DO NOT** modify this file, edit array_list_methods.fypp instead.                               !
+!--------------------------------------------------------------------------------------------------!
+
 ! **************************************************************************************************
 !> \brief Representation of arbitrary number of 1d integer arrays with arbitrary sizes.
 !>
@@ -24,6 +29,7 @@ MODULE array_list_methods
       get_array_elements, &
       get_arrays, &
       number_of_arrays, &
+      reorder_arrays, &
       sizes_of_arrays, &
       sum_of_arrays
 
@@ -35,6 +41,19 @@ MODULE array_list_methods
 CONTAINS
 
 ! **************************************************************************************************
+!> \brief number of arrays stored in list
+!> \param list ...
+!> \retval number_of_arrays ...
+! **************************************************************************************************
+   PURE FUNCTION number_of_arrays(list)
+      TYPE(array_list), INTENT(IN)                       :: list
+      INTEGER                                            :: number_of_arrays
+
+      number_of_arrays = SIZE(list%ptr)-1
+
+   END FUNCTION number_of_arrays
+
+! **************************************************************************************************
 !> \brief Get an element for each array.
 !> \param list ...
 !> \param indices element index for each array
@@ -42,8 +61,9 @@ CONTAINS
 ! **************************************************************************************************
    FUNCTION get_array_elements(list, indices)
       TYPE(array_list), INTENT(IN)                       :: list
-      INTEGER, DIMENSION(:), INTENT(IN)                  :: indices
-      INTEGER, DIMENSION(SIZE(indices))                  :: get_array_elements
+      INTEGER, DIMENSION(number_of_arrays(list)), &
+         INTENT(IN)                                      :: indices
+      INTEGER, DIMENSION(number_of_arrays(list))         :: get_array_elements
 
       INTEGER                                            :: i, ind
 
@@ -58,51 +78,36 @@ CONTAINS
 !> \brief collects any number of arrays of different sizes into a single array (list%col_data),
 !>        storing the indices that start a new array (list%ptr).
 !> \param list ...
-!> \param data1 first array
-!> \param data2 second array
-!> \param data3 ...
-!> \param data4 ...
-!> \param data5 ...
-!> \param data6 ...
-!> \param ndata_check ...
+!> \param ndata ...
+!> \param data_1 ...
+!> \param data_2 ...
+!> \param data_3 ...
+!> \param data_4 ...
 ! **************************************************************************************************
-   SUBROUTINE create_array_list(list, data1, data2, data3, data4, data5, data6, ndata_check)
+   SUBROUTINE create_array_list(list, ndata, data_1, data_2, data_3, data_4)
       TYPE(array_list), INTENT(OUT)                      :: list
-      INTEGER, ALLOCATABLE, DIMENSION(:), INTENT(IN), &
-         OPTIONAL                                        :: data1, data2, data3, data4, data5, data6
-      INTEGER, INTENT(IN), OPTIONAL                      :: ndata_check
+      INTEGER, INTENT(IN)                                :: ndata
+      INTEGER, DIMENSION(:), INTENT(IN), OPTIONAL        :: data_1, data_2, data_3, data_4
 
-      INTEGER                                            :: ndata, ptr, size_all
+      INTEGER                                            :: ptr, size_all
 
       size_all = 0
-      ndata = 0
-      IF (present_and_allocated_i(data1)) THEN
-         ndata = ndata+1
-         size_all = size_all+SIZE(data1)
-         IF (present_and_allocated_i(data2)) THEN
-            ndata = ndata+1
-            size_all = size_all+SIZE(data2)
-            IF (present_and_allocated_i(data3)) THEN
-               ndata = ndata+1
-               size_all = size_all+SIZE(data3)
-               IF (present_and_allocated_i(data4)) THEN
-                  ndata = ndata+1
-                  size_all = size_all+SIZE(data4)
-                  IF (present_and_allocated_i(data5)) THEN
-                     ndata = ndata+1
-                     size_all = size_all+SIZE(data5)
-                     IF (present_and_allocated_i(data6)) THEN
-                        ndata = ndata+1
-                        size_all = size_all+SIZE(data6)
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ENDIF
-         ENDIF
-      ENDIF
 
-      IF (PRESENT(ndata_check)) THEN
-         CPASSERT(ndata_check .EQ. ndata)
+      IF (ndata .GE. 1) THEN
+         CPASSERT(PRESENT(data_1))
+         size_all = size_all+SIZE(data_1)
+      ENDIF
+      IF (ndata .GE. 2) THEN
+         CPASSERT(PRESENT(data_2))
+         size_all = size_all+SIZE(data_2)
+      ENDIF
+      IF (ndata .GE. 3) THEN
+         CPASSERT(PRESENT(data_3))
+         size_all = size_all+SIZE(data_3)
+      ENDIF
+      IF (ndata .GE. 4) THEN
+         CPASSERT(PRESENT(data_4))
+         size_all = size_all+SIZE(data_4)
       ENDIF
 
       ALLOCATE (list%ptr(ndata+1))
@@ -110,35 +115,26 @@ CONTAINS
 
       ptr = 1
       list%ptr(1) = ptr
-      IF (present_and_allocated_i(data1)) THEN
-         list%col_data(ptr:ptr+SIZE(data1)-1) = data1(:)
-         ptr = ptr+SIZE(data1)
+
+      IF (ndata .GE. 1) THEN
+         list%col_data(ptr:ptr+SIZE(data_1)-1) = data_1(:)
+         ptr = ptr+SIZE(data_1)
          list%ptr(2) = ptr
-         IF (present_and_allocated_i(data2)) THEN
-            list%col_data(ptr:ptr+SIZE(data2)-1) = data2(:)
-            ptr = ptr+SIZE(data2)
-            list%ptr(3) = ptr
-            IF (present_and_allocated_i(data3)) THEN
-               list%col_data(ptr:ptr+SIZE(data3)-1) = data3(:)
-               ptr = ptr+SIZE(data3)
-               list%ptr(4) = ptr
-               IF (present_and_allocated_i(data4)) THEN
-                  list%col_data(ptr:ptr+SIZE(data4)-1) = data4(:)
-                  ptr = ptr+SIZE(data4)
-                  list%ptr(5) = ptr
-                  IF (present_and_allocated_i(data5)) THEN
-                     list%col_data(ptr:ptr+SIZE(data5)-1) = data5(:)
-                     ptr = ptr+SIZE(data5)
-                     list%ptr(6) = ptr
-                     IF (present_and_allocated_i(data6)) THEN
-                        list%col_data(ptr:ptr+SIZE(data6)-1) = data6(:)
-                        ptr = ptr+SIZE(data6)
-                        list%ptr(7) = ptr
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ENDIF
-         ENDIF
+      ENDIF
+      IF (ndata .GE. 2) THEN
+         list%col_data(ptr:ptr+SIZE(data_2)-1) = data_2(:)
+         ptr = ptr+SIZE(data_2)
+         list%ptr(3) = ptr
+      ENDIF
+      IF (ndata .GE. 3) THEN
+         list%col_data(ptr:ptr+SIZE(data_3)-1) = data_3(:)
+         ptr = ptr+SIZE(data_3)
+         list%ptr(4) = ptr
+      ENDIF
+      IF (ndata .GE. 4) THEN
+         list%col_data(ptr:ptr+SIZE(data_4)-1) = data_4(:)
+         ptr = ptr+SIZE(data_4)
+         list%ptr(5) = ptr
       ENDIF
 
    END SUBROUTINE
@@ -156,22 +152,21 @@ CONTAINS
 ! **************************************************************************************************
 !> \brief helper Get all arrays contained in list
 !> \param list ...
-!> \param data1 first array
-!> \param data2 second array
-!> \param data3 ...
-!> \param data4 ...
-!> \param data5 ...
-!> \param data6 ...
+!> \param data_1 ...
+!> \param data_2 ...
+!> \param data_3 ...
+!> \param data_4 ...
 !> \param order order in which to retrieve arrays
 ! **************************************************************************************************
-   SUBROUTINE get_arrays(list, data1, data2, data3, data4, data5, data6, order)
+   SUBROUTINE get_arrays(list, data_1, data_2, data_3, data_4, order)
       TYPE(array_list), INTENT(IN)                       :: list
       INTEGER, ALLOCATABLE, DIMENSION(:), INTENT(OUT), &
-         OPTIONAL                                        :: data1, data2, data3, data4, data5, data6
-      INTEGER, DIMENSION(:), INTENT(IN), OPTIONAL        :: order
+         OPTIONAL                                        :: data_1, data_2, data_3, data_4
+      INTEGER, DIMENSION(number_of_arrays(list)), &
+         INTENT(IN), OPTIONAL                            :: order
 
-      INTEGER                                            :: I, ndata
-      INTEGER, DIMENSION(6)                              :: o
+      INTEGER                                            :: i, ndata
+      INTEGER, DIMENSION(number_of_arrays(list))         :: o
 
       ndata = number_of_arrays(list)
 
@@ -179,44 +174,29 @@ CONTAINS
       IF (PRESENT(order)) THEN
          o(1:ndata) = order(:)
       ELSE
-         o(1:ndata) = (/(I, I=1, ndata)/)
+         o(1:ndata) = (/(i, i=1, ndata)/)
       ENDIF
 
       ASSOCIATE(ptr=>list%ptr, col_data=>list%col_data)
       IF (ndata > 0) THEN
-         ALLOCATE (data1(ptr(o(1)+1)-ptr(o(1)))); data1(:) = col_data(ptr(o(1)):ptr(o(1)+1)-1)
-         IF (ndata > 1) THEN
-            ALLOCATE (data2(ptr(o(2)+1)-ptr(o(2)))); data2(:) = col_data(ptr(o(2)):ptr(o(2)+1)-1)
-            IF (ndata > 2) THEN
-               ALLOCATE (data3(ptr(o(3)+1)-ptr(o(3)))); data3(:) = col_data(ptr(o(3)):ptr(o(3)+1)-1)
-               IF (ndata > 3) THEN
-                  ALLOCATE (data4(ptr(o(4)+1)-ptr(o(4)))); data4(:) = col_data(ptr(o(4)):ptr(o(4)+1)-1)
-                  IF (ndata > 4) THEN
-                     ALLOCATE (data5(ptr(o(5)+1)-ptr(o(5)))); data5(:) = col_data(ptr(o(5)):ptr(o(5)+1)-1)
-                     IF (ndata > 5) THEN
-                        ALLOCATE (data6(ptr(o(6)+1)-ptr(o(6)))); data6(:) = col_data(ptr(o(6)):ptr(o(6)+1)-1)
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ENDIF
-         ENDIF
+         ALLOCATE (data_1(ptr(o(1)+1)-ptr(o(1))))
+         data_1(:) = col_data(ptr(o(1)):ptr(o(1)+1)-1)
+      ENDIF
+      IF (ndata > 1) THEN
+         ALLOCATE (data_2(ptr(o(2)+1)-ptr(o(2))))
+         data_2(:) = col_data(ptr(o(2)):ptr(o(2)+1)-1)
+      ENDIF
+      IF (ndata > 2) THEN
+         ALLOCATE (data_3(ptr(o(3)+1)-ptr(o(3))))
+         data_3(:) = col_data(ptr(o(3)):ptr(o(3)+1)-1)
+      ENDIF
+      IF (ndata > 3) THEN
+         ALLOCATE (data_4(ptr(o(4)+1)-ptr(o(4))))
+         data_4(:) = col_data(ptr(o(4)):ptr(o(4)+1)-1)
       ENDIF
       END ASSOCIATE
 
    END SUBROUTINE get_arrays
-
-! **************************************************************************************************
-!> \brief number of arrays stored in list
-!> \param list ...
-!> \retval number_of_arrays ...
-! **************************************************************************************************
-   FUNCTION number_of_arrays(list)
-      TYPE(array_list), INTENT(IN)                       :: list
-      INTEGER                                            :: number_of_arrays
-
-      number_of_arrays = SIZE(list%ptr)-1
-
-   END FUNCTION number_of_arrays
 
 ! **************************************************************************************************
 !> \brief sizes of arrays stored in list
@@ -280,24 +260,36 @@ CONTAINS
    END SUBROUTINE
 
 ! **************************************************************************************************
-!> \brief check if argument is present and allocated
-!> \param arr ...
-!> \retval present_and_allocated_i ...
+!> \brief reorder array list.
+!> \param list_in ...
+!> \param list_out ...
+!> \param order ...
 ! **************************************************************************************************
-   FUNCTION present_and_allocated_i(arr)
-      INTEGER, ALLOCATABLE, DIMENSION(:), INTENT(IN), &
-         OPTIONAL                                        :: arr
-      LOGICAL                                            :: present_and_allocated_i
+   SUBROUTINE reorder_arrays(list_in, list_out, order)
+      TYPE(array_list), INTENT(IN)                       :: list_in
+      TYPE(array_list), INTENT(OUT)                      :: list_out
+      INTEGER, DIMENSION(number_of_arrays(list_in)), &
+         INTENT(IN)                                      :: order
 
-      present_and_allocated_i = .FALSE.
+      INTEGER, ALLOCATABLE, DIMENSION(:)                 :: data_1, data_2, data_3, data_4
 
-      IF (PRESENT(arr)) THEN
-         IF (ALLOCATED(arr)) THEN
-            present_and_allocated_i = .TRUE.
-         ENDIF
+      IF (number_of_arrays(list_in) == 2) THEN
+         CALL get_arrays(list_in, data_1, data_2, order=order)
+         CALL create_array_list(list_out, number_of_arrays(list_in), &
+                                data_1, data_2)
+      ENDIF
+      IF (number_of_arrays(list_in) == 3) THEN
+         CALL get_arrays(list_in, data_1, data_2, data_3, order=order)
+         CALL create_array_list(list_out, number_of_arrays(list_in), &
+                                data_1, data_2, data_3)
+      ENDIF
+      IF (number_of_arrays(list_in) == 4) THEN
+         CALL get_arrays(list_in, data_1, data_2, data_3, data_4, order=order)
+         CALL create_array_list(list_out, number_of_arrays(list_in), &
+                                data_1, data_2, data_3, data_4)
       ENDIF
 
-   END FUNCTION
+   END SUBROUTINE
 
 END MODULE array_list_methods
 

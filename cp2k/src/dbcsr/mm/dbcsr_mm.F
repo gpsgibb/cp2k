@@ -21,10 +21,9 @@ MODULE dbcsr_mm
                                               array_i1d_obj,&
                                               array_nullify,&
                                               array_release
-   USE dbcsr_config,                    ONLY: default_resize_factor,&
-                                              has_acc,&
-                                              num_layers_3D,&
-                                              use_mpi_exp
+   USE dbcsr_config,                    ONLY: dbcsr_cfg,&
+                                              default_resize_factor,&
+                                              has_acc
    USE dbcsr_data_methods,              ONLY: dbcsr_data_set_size_referenced,&
                                               dbcsr_scalar,&
                                               dbcsr_scalar_are_equal,&
@@ -53,8 +52,8 @@ MODULE dbcsr_mm
    USE dbcsr_methods,                   ONLY: &
         dbcsr_col_block_offsets, dbcsr_col_block_sizes, dbcsr_destroy_array, dbcsr_distribution, &
         dbcsr_get_data_type, dbcsr_get_matrix_type, dbcsr_has_symmetry, dbcsr_image_dist_release, &
-        dbcsr_init, dbcsr_nblkcols_total, dbcsr_nfullcols_total, dbcsr_nfullrows_total, &
-        dbcsr_release, dbcsr_release_locals, dbcsr_row_block_offsets
+        dbcsr_nblkcols_total, dbcsr_nfullcols_total, dbcsr_nfullrows_total, dbcsr_release, &
+        dbcsr_release_locals, dbcsr_row_block_offsets
    USE dbcsr_mm_3D,                     ONLY: buffers_release,&
                                               dbcsr_make_buffers,&
                                               make_layers_3D_C_reduction,&
@@ -150,7 +149,7 @@ CONTAINS
       ! Each thread has its own working-matrix and its own mempool
       ALLOCATE (memtype_product_wm(ithread)%p)
       CALL dbcsr_memtype_setup(memtype_product_wm(ithread)%p, has_pool=.TRUE.)
-      CALL dbcsr_mempool_limit_capacity(memtype_product_wm(ithread)%p%pool, capacity=MAX(1, num_layers_3D))
+      CALL dbcsr_mempool_limit_capacity(memtype_product_wm(ithread)%p%pool, capacity=MAX(1, dbcsr_cfg%num_layers_3D))
    END SUBROUTINE dbcsr_multiply_lib_init
 
 ! **************************************************************************************************
@@ -439,7 +438,7 @@ CONTAINS
                                   acc_hostalloc=.TRUE., acc_devalloc=.TRUE., acc_stream=stream_1)
          CALL dbcsr_memtype_setup(memtype_trsbuffer_2, has_pool=.TRUE., &
                                   acc_hostalloc=.TRUE., acc_devalloc=.TRUE., acc_stream=stream_2)
-         IF (.NOT. use_mpi_exp) THEN
+         IF (.NOT. dbcsr_cfg%use_mpi_exp) THEN
             CALL dbcsr_mempool_limit_capacity(memtype_trsbuffer_1%pool, capacity=1)
             CALL dbcsr_mempool_limit_capacity(memtype_trsbuffer_2%pool, capacity=1)
          ENDIF
@@ -488,7 +487,7 @@ CONTAINS
          matrix_left = matrix_a
          transpose_left = .FALSE.
       CASE (dbcsr_transpose)
-         CALL dbcsr_init(matrix_left)
+         matrix_left = dbcsr_obj()
          IF (dbcsr_get_matrix_type(matrix_a) .EQ. dbcsr_type_antisymmetric) THEN
             !
             ! For antisymmetric matrix, we need to do a hard copy
@@ -503,7 +502,7 @@ CONTAINS
          ENDIF
          transpose_left = .TRUE.
       CASE (dbcsr_conjugate_transpose)
-         CALL dbcsr_init(matrix_left)
+         matrix_left = dbcsr_obj()
          CALL dbcsr_new_transposed(matrix_left, matrix_a, &
                                    shallow_data_copy=.FALSE., redistribute=.FALSE., &
                                    transpose_distribution=.FALSE.)
@@ -518,7 +517,7 @@ CONTAINS
          matrix_right = matrix_b
          transpose_right = .FALSE.
       CASE (dbcsr_transpose)
-         CALL dbcsr_init(matrix_right)
+         matrix_right = dbcsr_obj()
          IF (dbcsr_get_matrix_type(matrix_b) .EQ. dbcsr_type_antisymmetric) THEN
             !
             ! For antisymmetric matrix, we need to do a hard copy
@@ -533,7 +532,7 @@ CONTAINS
          ENDIF
          transpose_right = .TRUE.
       CASE (dbcsr_conjugate_transpose)
-         CALL dbcsr_init(matrix_right)
+         matrix_right = dbcsr_obj()
          CALL dbcsr_new_transposed(matrix_right, matrix_b, &
                                    shallow_data_copy=.FALSE., redistribute=.FALSE., &
                                    transpose_distribution=.FALSE.)
@@ -566,10 +565,10 @@ CONTAINS
                      dbcsr_distribution_has_col_clusters(matrix_right%m%dist)
       !
       ! 3D layers
-      CALL make_layers_3D_C_reduction(num_layers_3D, mp_obj, has_clusters)
+      CALL make_layers_3D_C_reduction(dbcsr_cfg%num_layers_3D, mp_obj, has_clusters)
       !
       ! No dense multiplication and local indexing when 2D clustering is used.
-      IF (use_mpi_exp) THEN
+      IF (dbcsr_cfg%use_mpi_exp) THEN
          use_dense_mult = .FALSE.
       ENDIF
       ! we skip dense multiply for (anti)symmetric matrices (slowdown for S/H * C)
@@ -697,7 +696,7 @@ CONTAINS
       !
       ! Compute number of images (rows and columns)
       ! By construction clusters require RMA algo
-      IF (use_mpi_exp .AND. dbcsr_distribution_has_row_clusters(matrix_left%m%dist)) THEN
+      IF (dbcsr_cfg%use_mpi_exp .AND. dbcsr_distribution_has_row_clusters(matrix_left%m%dist)) THEN
          nimages_left_rows = dbcsr_distribution_num_local_row_clusters(matrix_left%m%dist)* &
                              dbcsr_mp_nprows(dbcsr_distribution_mp(matrix_left%m%dist))
       ELSE
@@ -705,10 +704,10 @@ CONTAINS
          nimages_left_rows = dbcsr_mp_nprows(dbcsr_distribution_mp(matrix_left%m%dist))
       ENDIF
       !
-      IF (use_mpi_exp .AND. dbcsr_distribution_has_col_clusters(matrix_left%m%dist)) THEN
+      IF (dbcsr_cfg%use_mpi_exp .AND. dbcsr_distribution_has_col_clusters(matrix_left%m%dist)) THEN
          nimages_match = dbcsr_distribution_num_local_col_clusters(matrix_left%m%dist)* &
                          dbcsr_mp_npcols(dbcsr_distribution_mp(matrix_left%m%dist))
-      ELSE IF (use_mpi_exp .AND. dbcsr_distribution_has_row_clusters(matrix_right%m%dist)) THEN
+      ELSE IF (dbcsr_cfg%use_mpi_exp .AND. dbcsr_distribution_has_row_clusters(matrix_right%m%dist)) THEN
          nimages_match = dbcsr_distribution_num_local_row_clusters(matrix_right%m%dist)* &
                          dbcsr_mp_nprows(dbcsr_distribution_mp(matrix_right%m%dist))
       ELSE
@@ -720,7 +719,7 @@ CONTAINS
                          dbcsr_mp_npcols(dbcsr_distribution_mp(matrix_left%m%dist)))
       ENDIF
       !
-      IF (use_mpi_exp .AND. dbcsr_distribution_has_col_clusters(matrix_right%m%dist)) THEN
+      IF (dbcsr_cfg%use_mpi_exp .AND. dbcsr_distribution_has_col_clusters(matrix_right%m%dist)) THEN
          nimages_right_cols = dbcsr_distribution_num_local_col_clusters(matrix_right%m%dist)* &
                               dbcsr_mp_npcols(dbcsr_distribution_mp(matrix_right%m%dist))
       ELSE
@@ -774,13 +773,13 @@ CONTAINS
          CALL array_hold(old_product_col_blk_sizes)
          old_product_distribution = dbcsr_distribution(matrix_c)
          CALL dbcsr_distribution_hold(old_product_distribution)
-         CALL dbcsr_init(product_matrix)
+         product_matrix = dbcsr_obj()
          CALL dbcsr_make_dense(matrix_c, product_matrix, &
                                dense_product_distribution, &
                                dense_row_sizes, dense_col_sizes, &
                                m_map, n_map)
       ELSE
-         CALL dbcsr_init(product_matrix)
+         product_matrix = dbcsr_obj()
          CALL dbcsr_copy(product_matrix, matrix_c, shallow_data=.TRUE.)
       ENDIF
       IF (ab_dense) THEN
@@ -821,7 +820,7 @@ CONTAINS
 !$OMP END PARALLEL
       ENDIF
       !
-      IF (use_mpi_exp) THEN
+      IF (dbcsr_cfg%use_mpi_exp) THEN
          !
          ! Left buffer images
          CALL dbcsr_make_buffers(matrix_left, rdist_left, .TRUE., &
@@ -873,7 +872,7 @@ CONTAINS
       f_k = 0; l_k = 0
       !
       my_flop = 0
-      IF (use_mpi_exp) THEN
+      IF (dbcsr_cfg%use_mpi_exp) THEN
          IF (has_clusters) THEN
             CALL multiply_clusters(rdist_left, rdist_right, &
                                    matrix_left, matrix_right, product_matrix, &
@@ -897,7 +896,7 @@ CONTAINS
       ENDIF
       !
       ! RMA implementation algorithm has to synchronize at the end of each multiplication
-      IF (PRESENT(flop) .OR. use_mpi_exp) THEN
+      IF (PRESENT(flop) .OR. dbcsr_cfg%use_mpi_exp) THEN
          ! return the average number of flops per MPI rank.
          ! Variance (which is fairly large) could be computed as well.
          CALL timeset(routineN//"_mpsum_flop", handle2)
@@ -925,7 +924,7 @@ CONTAINS
       ENDIF
       IF (use_dense_mult) THEN
          CALL dbcsr_release(matrix_c)
-         CALL dbcsr_init(matrix_c)
+         matrix_c = dbcsr_obj()
          CALL dbcsr_make_undense(product_matrix, matrix_c, &
                                  old_product_distribution, &
                                  old_product_row_blk_offsets, old_product_col_blk_offsets, &
@@ -939,12 +938,12 @@ CONTAINS
          CALL dbcsr_distribution_release(old_product_distribution)
       ELSE
          CALL dbcsr_release(matrix_c)
-         CALL dbcsr_init(matrix_c)
+         matrix_c = dbcsr_obj()
          CALL dbcsr_copy(matrix_c, product_matrix, shallow_data=.TRUE.)
          CALL dbcsr_release(product_matrix)
       ENDIF
       !
-      IF (.NOT. use_mpi_exp) THEN
+      IF (.NOT. dbcsr_cfg%use_mpi_exp) THEN
          CALL dbcsr_destroy_array(m2s_left)
          DEALLOCATE (m2s_left)
          CALL dbcsr_destroy_array(m2s_right)

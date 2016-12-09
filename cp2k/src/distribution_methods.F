@@ -22,17 +22,17 @@ MODULE distribution_methods
                                               scaled_to_real
    USE cp_array_utils_i,                ONLY: cp_1d_i_p_type
    USE cp_blacs_env,                    ONLY: cp_blacs_env_type
-   USE cp_dbcsr_interface,              ONLY: cp_distribution_get_num_images,&
-                                              heap_fill,&
-                                              heap_get_first,&
-                                              heap_new,&
-                                              heap_release,&
-                                              heap_reset_first,&
-                                              heap_t
+   USE cp_dbcsr_interface,              ONLY: cp_distribution_get_num_images
    USE cp_log_handling,                 ONLY: cp_get_default_logger,&
                                               cp_logger_get_default_io_unit,&
                                               cp_logger_get_default_unit_nr,&
                                               cp_logger_type
+   USE cp_min_heap,                     ONLY: cp_heap_fill,&
+                                              cp_heap_get_first,&
+                                              cp_heap_new,&
+                                              cp_heap_release,&
+                                              cp_heap_reset_first,&
+                                              cp_heap_type
    USE cp_output_handling,              ONLY: cp_p_file,&
                                               cp_print_key_finished_output,&
                                               cp_print_key_should_output,&
@@ -125,18 +125,17 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'distribute_molecules_1d', &
          routineP = moduleN//':'//routineN
 
-      INTEGER :: atom_a, bin, bin_price, group, handle, iatom, imolecule, imolecule_kind, &
-         imolecule_local, imolecule_prev_kind, iparticle_kind, ipe, istat, iw, kind_a, molecule_a, &
-         mype, n, natom, nbins, nload, nmolecule, nmolecule_kind, nparticle_kind, npe, nsgf, &
-         output_unit
-      INTEGER, ALLOCATABLE, DIMENSION(:)                 :: nmolecule_local, nparticle_local, work, &
-                                                            workload_count, workload_fill
+      INTEGER :: atom_a, bin, group, handle, iatom, imolecule, imolecule_kind, imolecule_local, &
+         imolecule_prev_kind, iparticle_kind, ipe, istat, iw, kind_a, molecule_a, mype, n, natom, &
+         nbins, nload, nmolecule, nmolecule_kind, nparticle_kind, npe, nsgf, output_unit
+      INTEGER(int_8)                                     :: bin_price
+      INTEGER(int_8), ALLOCATABLE, DIMENSION(:)          :: workload_count, workload_fill
+      INTEGER, ALLOCATABLE, DIMENSION(:)                 :: nmolecule_local, nparticle_local, work
       INTEGER, DIMENSION(:), POINTER                     :: molecule_list
-      LOGICAL                                            :: found, has_prev_subsys_info, heap_error, &
-                                                            is_local
+      LOGICAL                                            :: found, has_prev_subsys_info, is_local
       TYPE(cp_1d_i_p_type), ALLOCATABLE, DIMENSION(:)    :: local_molecule
+      TYPE(cp_heap_type)                                 :: bin_heap_count, bin_heap_fill
       TYPE(cp_logger_type), POINTER                      :: logger
-      TYPE(heap_t)                                       :: bin_heap_count, bin_heap_fill
       TYPE(molecule_kind_type), POINTER                  :: molecule_kind
 
 ! integer n_local_molecules
@@ -189,17 +188,11 @@ CONTAINS
 
       nbins = npe
 
-      CALL heap_new(bin_heap_count, nbins)
-      CALL heap_fill(bin_heap_count, &
-                     (/(bin, bin=1, nbins)/), workload_count, heap_error)
-      IF (heap_error) &
-         CPABORT("Error initially filling the heap.")
+      CALL cp_heap_new(bin_heap_count, nbins)
+      CALL cp_heap_fill(bin_heap_count, workload_count)
 
-      CALL heap_new(bin_heap_fill, nbins)
-      CALL heap_fill(bin_heap_fill, &
-                     (/(bin, bin=1, nbins)/), workload_fill, heap_error)
-      IF (heap_error) &
-         CPABORT("Error initially filling the heap.")
+      CALL cp_heap_new(bin_heap_fill, nbins)
+      CALL cp_heap_fill(bin_heap_fill, workload_fill)
 
       DO imolecule_kind = 1, nmolecule_kind
 
@@ -233,9 +226,7 @@ CONTAINS
                   ENDIF
                END DO
             ELSE
-               CALL heap_get_first(bin_heap_count, bin, bin_price, found, heap_error)
-               IF (heap_error) &
-                  CPABORT("Error getting topmost heap element.")
+               CALL cp_heap_get_first(bin_heap_count, bin, bin_price, found)
                IF (.NOT. found) &
                   CPABORT("No topmost heap element found.")
 
@@ -249,9 +240,7 @@ CONTAINS
                END IF
 
                bin_price = workload_count(ipe)
-               CALL heap_reset_first(bin_heap_count, bin_price, heap_error)
-               IF (heap_error) &
-                  CPWARN("Error setting price of top heap element.")
+               CALL cp_heap_reset_first(bin_heap_count, bin_price)
             END IF
          END DO
 
@@ -280,9 +269,7 @@ CONTAINS
                   END IF
                END DO
             ELSE
-               CALL heap_get_first(bin_heap_fill, bin, bin_price, found, heap_error)
-               IF (heap_error) &
-                  CPABORT("Error getting topmost heap element.")
+               CALL cp_heap_get_first(bin_heap_fill, bin, bin_price, found)
                IF (.NOT. found) &
                   CPABORT("No topmost heap element found.")
 
@@ -307,9 +294,7 @@ CONTAINS
             END IF
             IF (.NOT. has_prev_subsys_info) THEN
                bin_price = workload_fill(ipe)
-               CALL heap_reset_first(bin_heap_fill, bin_price, heap_error)
-               IF (heap_error) &
-                  CPWARN("Error setting price of top heap element.")
+               CALL cp_heap_reset_first(bin_heap_fill, bin_price)
             END IF
          END DO
 
@@ -318,8 +303,8 @@ CONTAINS
       IF (ANY(workload_fill .NE. workload_count)) &
          CPABORT("Inconsistent heaps encountered")
 
-      CALL heap_release(bin_heap_count)
-      CALL heap_release(bin_heap_fill)
+      CALL cp_heap_release(bin_heap_count)
+      CALL cp_heap_release(bin_heap_fill)
 
 !   *** Create the local molecule structure ***
 
@@ -928,11 +913,12 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'make_basic_distribution', &
          routineP = moduleN//':'//routineN
 
-      INTEGER                                            :: bin, bin_price, cluster, cluster_index, &
+      INTEGER                                            :: bin, cluster, cluster_index, &
                                                             cluster_price, nbins, nclusters, pcol, &
                                                             pgrid_gcd, prow, timing_handle
-      LOGICAL                                            :: found, heap_error
-      TYPE(heap_t)                                       :: bin_heap
+      INTEGER(int_8)                                     :: bin_price
+      LOGICAL                                            :: found
+      TYPE(cp_heap_type)                                 :: bin_heap
 
 !   ---------------------------------------------------------------------------
 
@@ -940,27 +926,22 @@ CONTAINS
       nbins = lcm(nprows, npcols)
       pgrid_gcd = gcd(nprows, npcols)
       CALL sort(cluster_prices, SIZE(cluster_list), cluster_list)
-      CALL heap_new(bin_heap, nbins)
-      CALL heap_fill(bin_heap, &
-                     (/(bin, bin=0, nbins-1)/), (/(0, bin=1, nbins)/), heap_error)
-      IF (heap_error) &
-         CPABORT("Error initially filling the heap.")
+      CALL cp_heap_new(bin_heap, nbins)
+      CALL cp_heap_fill(bin_heap, (/(0_int_8, bin=1, nbins)/))
       !
       nclusters = SIZE(cluster_list)
       ! Put the most expensive cluster in the bin with the smallest
       ! price and repeat.
       DO cluster_index = nclusters, 1, -1
          cluster = cluster_list(cluster_index)
-         CALL heap_get_first(bin_heap, bin, bin_price, found, heap_error)
-         IF (heap_error) &
-            CPABORT("Error getting topmost heap element.")
+         CALL cp_heap_get_first(bin_heap, bin, bin_price, found)
          IF (.NOT. found) &
             CPABORT("No topmost heap element found.")
          !
-         prow = INT(bin*pgrid_gcd/npcols)
+         prow = INT((bin-1)*pgrid_gcd/npcols)
          IF (prow .GE. nprows) &
             CPABORT("Invalid process row.")
-         pcol = INT(bin*pgrid_gcd/nprows)
+         pcol = INT((bin-1)*pgrid_gcd/nprows)
          IF (pcol .GE. npcols) &
             CPABORT("Invalid process column.")
          row_distribution(cluster) = prow+1
@@ -968,11 +949,9 @@ CONTAINS
          !
          cluster_price = cluster_prices(cluster_index)
          bin_price = bin_price+cluster_price
-         CALL heap_reset_first(bin_heap, bin_price, heap_error)
-         IF (heap_error) &
-            CPWARN("Error setting price of top heap element.")
+         CALL cp_heap_reset_first(bin_heap, bin_price)
       ENDDO
-      CALL heap_release(bin_heap)
+      CALL cp_heap_release(bin_heap)
       CALL timestop(timing_handle)
    END SUBROUTINE make_basic_distribution
 
@@ -1272,7 +1251,7 @@ CONTAINS
       IF (natoms .LE. 1) THEN
          nsplits = 1
       ELSE
-         nsplits = MIN(INT(MIN(INT(MAX(6, INT(60.00/LOG(REAL(natoms)))), KIND=int_8), ncluster)), natoms)
+         nsplits = MIN(INT(MIN(INT(MAX(6, INT(60.00/LOG(REAL(natoms, KIND=dp)))), KIND=int_8), ncluster)), natoms)
       ENDIF
       IF (nsplits == 1) THEN
          icluster = icluster+1
@@ -1283,7 +1262,7 @@ CONTAINS
          ! initialise some values
          cluster_cost = 0; seed = 300; found = .TRUE.; min_seed = seed
          CALL kmeans(nsplits, coord, scaled_coord, cell, cluster_inds, nat_cluster, seed, conv)
-         balance = MAXVAL(REAL(nat_cluster))/MINVAL(REAL(nat_cluster))
+         balance = MAXVAL(REAL(nat_cluster, KIND=dp))/MINVAL(REAL(nat_cluster, KIND=dp))
 
          ! If the system is small enough try to do better in terms of balancing number of atoms per cluster
          ! by changing the seed for the initial guess
@@ -1292,7 +1271,7 @@ CONTAINS
             DO i = 1, 5
                IF (balance .GT. 1.1) THEN
                   CALL kmeans(nsplits, coord, scaled_coord, cell, cluster_inds, nat_cluster, seed+i*40, conv)
-                  balance_new = MAXVAL(REAL(nat_cluster))/MINVAL(REAL(nat_cluster))
+                  balance_new = MAXVAL(REAL(nat_cluster, KIND=dp))/MINVAL(REAL(nat_cluster, KIND=dp))
                   IF (balance_new .LT. balance) THEN
                      balance = balance_new
                      min_seed = seed+i*40; 

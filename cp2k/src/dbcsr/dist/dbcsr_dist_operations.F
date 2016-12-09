@@ -17,20 +17,25 @@ MODULE dbcsr_dist_operations
    USE array_types,                     ONLY: &
         array_data, array_equality, array_exists, array_hold, array_i1d_obj, array_new, &
         array_nullify, array_release, array_size
-   USE dbcsr_config,                    ONLY: max_elements_per_block
+   USE dbcsr_config,                    ONLY: dbcsr_cfg
    USE dbcsr_dist_methods,              ONLY: &
         dbcsr_distribution_col_clusters, dbcsr_distribution_col_dist, &
         dbcsr_distribution_has_col_clusters, dbcsr_distribution_has_row_clusters, &
-        dbcsr_distribution_has_threads, dbcsr_distribution_hold, dbcsr_distribution_init, &
-        dbcsr_distribution_local_cols, dbcsr_distribution_local_rows, &
-        dbcsr_distribution_make_threads, dbcsr_distribution_mp, dbcsr_distribution_ncols, &
-        dbcsr_distribution_new, dbcsr_distribution_no_threads, dbcsr_distribution_nrows, &
-        dbcsr_distribution_num_local_col_clusters, dbcsr_distribution_num_local_row_clusters, &
-        dbcsr_distribution_processor, dbcsr_distribution_release, dbcsr_distribution_row_clusters, &
-        dbcsr_distribution_row_dist, dbcsr_distribution_thread_dist
+        dbcsr_distribution_has_threads, dbcsr_distribution_hold, dbcsr_distribution_local_cols, &
+        dbcsr_distribution_local_rows, dbcsr_distribution_make_threads, dbcsr_distribution_mp, &
+        dbcsr_distribution_ncols, dbcsr_distribution_new, dbcsr_distribution_no_threads, &
+        dbcsr_distribution_nrows, dbcsr_distribution_num_local_col_clusters, &
+        dbcsr_distribution_num_local_row_clusters, dbcsr_distribution_processor, &
+        dbcsr_distribution_release, dbcsr_distribution_row_clusters, dbcsr_distribution_row_dist, &
+        dbcsr_distribution_thread_dist
    USE dbcsr_methods,                   ONLY: dbcsr_distribution,&
-                                              dbcsr_is_initialized,&
                                               dbcsr_release_locals
+   USE dbcsr_min_heap,                  ONLY: dbcsr_heap_fill,&
+                                              dbcsr_heap_get_first,&
+                                              dbcsr_heap_new,&
+                                              dbcsr_heap_release,&
+                                              dbcsr_heap_reset_first,&
+                                              dbcsr_heap_type
    USE dbcsr_mp_methods,                ONLY: dbcsr_mp_mypcol,&
                                               dbcsr_mp_myprow,&
                                               dbcsr_mp_new_transposed,&
@@ -46,13 +51,8 @@ MODULE dbcsr_dist_operations
         dbcsr_distribution_obj, dbcsr_imagedistribution_obj, dbcsr_mp_obj, dbcsr_obj, &
         dbcsr_slot_home_pcol, dbcsr_slot_home_prow, dbcsr_slot_home_vpcol, dbcsr_slot_home_vprow, &
         dbcsr_slot_nblkcols_local, dbcsr_slot_nblkrows_local, dbcsr_type
-   USE kinds,                           ONLY: sp
-   USE min_heap,                        ONLY: heap_fill,&
-                                              heap_get_first,&
-                                              heap_new,&
-                                              heap_release,&
-                                              heap_reset_first,&
-                                              heap_t
+   USE kinds,                           ONLY: dp,&
+                                              sp
 #include "../../base/base_uses.f90"
 
   !$ USE OMP_LIB, ONLY: omp_get_max_threads, omp_get_thread_num, omp_get_num_threads
@@ -243,8 +243,6 @@ CONTAINS
 
 !   ---------------------------------------------------------------------------
 
-    IF (debug_mod .AND. .NOT.dbcsr_is_initialized(matrix))&
-       CPABORT("matrix%m not associated")
     IF (PRESENT (processor)) THEN
        CALL dbcsr_get_stored_coordinates (matrix%m, row, column, processor)
     ELSE
@@ -588,7 +586,7 @@ CONTAINS
 
 !   ---------------------------------------------------------------------------
 
-    maxbinsize = CEILING (REAL(SIZE (array)) / REAL(nbins))
+    maxbinsize = CEILING (REAL(SIZE (array), KIND=dp) / REAL(nbins, KIND=dp))
     DO bin = 1, nbins
        first = 1 + (bin-1)*maxbinsize
        last = MIN (1 + (bin)*maxbinsize-1, SIZE (array))
@@ -943,8 +941,6 @@ CONTAINS
     ALLOCATE (imgdist%i)
     imgdist%i%refcount = 1
     imgdist%i%id = idid
-    CALL dbcsr_distribution_init (new_dist)
-    CALL dbcsr_distribution_init (imgdist%i%main)
     mp_env = dbcsr_distribution_mp (dist)
     ! Determine the factors.
     nrows = dbcsr_distribution_nrows (dist)
@@ -1248,14 +1244,14 @@ CONTAINS
     ! Define the sizes on which we build the distribution.
     IF (nelements .GT. 0) THEN
 
-       nblocks = CEILING(REAL(nelements)/REAL(max_elements_per_block))
-       max_blocks_per_bin = CEILING(REAL(nblocks)/REAL(nbins))
+       nblocks = CEILING(REAL(nelements, KIND=dp)/REAL(dbcsr_cfg%max_elements_per_block, KIND=dp))
+       max_blocks_per_bin = CEILING(REAL(nblocks, KIND=dp)/REAL(nbins, KIND=dp))
 
        IF (debug_mod) THEN
           WRITE(*,'(1X,A,1X,A,I7,A,I7,A)')routineP,"For",nelements,&
                " elements and",nbins," bins"
           WRITE(*,'(1X,A,1X,A,I7,A)')routineP,"There are",&
-               max_elements_per_block," max elements per block"
+               dbcsr_cfg%max_elements_per_block," max elements per block"
           WRITE(*,'(1X,A,1X,A,I7,A)')routineP,"There are",&
                nblocks," blocks"
           WRITE(*,'(1X,A,1X,A,I7,A)')routineP,"There are",&
@@ -1273,7 +1269,7 @@ CONTAINS
        nblks = 0
        DO blk_layer = 1, max_blocks_per_bin
           DO bin = 0, nbins-1
-             els = MIN (max_elements_per_block, nelements-element_stack)
+             els = MIN (dbcsr_cfg%max_elements_per_block, nelements-element_stack)
              IF (els .GT. 0) THEN
                 element_stack = element_stack + els
                 nblks = nblks + 1
@@ -2405,9 +2401,9 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_dist_bin', routineP = moduleN//':'//routineN
 
       INTEGER                                            :: bin, bin_cnt, error_handle, i
-      LOGICAL                                            :: found, heap_error
+      LOGICAL                                            :: found
       REAL(kind=sp)                                      :: rn
-      TYPE(heap_t)                                       :: bin_heap
+      TYPE(dbcsr_heap_type)                              :: bin_heap
 
 !   ---------------------------------------------------------------------------
 
@@ -2416,16 +2412,15 @@ CONTAINS
     IF (PRESENT (element_sizes)) THEN
        IF(SIZE(element_sizes) /= nelements) &
           CPABORT("Array of element sizes does not match the number of elements.")
-       CALL heap_new (bin_heap, nbins)
-       CALL heap_fill (bin_heap, (/ (bin, bin = 0, nbins-1) /),&
-                                 (/ (0,   bin = 0, nbins-1) /), heap_error)
+       CALL dbcsr_heap_new (bin_heap, nbins)
+       CALL dbcsr_heap_fill (bin_heap, (/ (0,   bin = 0, nbins-1) /))
        DO i = 1, nelements
-          CALL heap_get_first (bin_heap, bin, bin_cnt, found, heap_error)
-          bin_dist(i) = bin
+          CALL dbcsr_heap_get_first (bin_heap, bin, bin_cnt, found)
+          bin_dist(i) = bin-1
           bin_cnt = bin_cnt + element_sizes(i)
-          CALL heap_reset_first (bin_heap, bin_cnt, heap_error)
+          CALL dbcsr_heap_reset_first (bin_heap, bin_cnt)
        ENDDO
-       CALL heap_release (bin_heap)
+       CALL dbcsr_heap_release (bin_heap)
     ELSE
        DO i = 1, nelements
           CALL RANDOM_NUMBER(rn)

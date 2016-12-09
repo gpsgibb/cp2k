@@ -16,11 +16,14 @@ MODULE dbcsr_dist_methods
                                               array_nullify,&
                                               array_release,&
                                               array_size
-   USE dbcsr_config,                    ONLY: avg_elements_images,&
-                                              comm_thread_load,&
-                                              num_mult_images
-   USE dbcsr_methods,                   ONLY: dbcsr_distribution_init,&
-                                              dbcsr_distribution_release
+   USE dbcsr_config,                    ONLY: dbcsr_cfg
+   USE dbcsr_methods,                   ONLY: dbcsr_distribution_release
+   USE dbcsr_min_heap,                  ONLY: dbcsr_heap_fill,&
+                                              dbcsr_heap_get_first,&
+                                              dbcsr_heap_new,&
+                                              dbcsr_heap_release,&
+                                              dbcsr_heap_reset_first,&
+                                              dbcsr_heap_type
    USE dbcsr_mp_methods,                ONLY: dbcsr_mp_hold,&
                                               dbcsr_mp_mypcol,&
                                               dbcsr_mp_myprow,&
@@ -31,12 +34,6 @@ MODULE dbcsr_dist_methods
    USE dbcsr_types,                     ONLY: dbcsr_distribution_obj,&
                                               dbcsr_mp_obj
    USE kinds,                           ONLY: sp
-   USE min_heap,                        ONLY: heap_fill,&
-                                              heap_get_first,&
-                                              heap_new,&
-                                              heap_release,&
-                                              heap_reset_first,&
-                                              heap_t
 #include "../../base/base_uses.f90"
 
 !$ USE OMP_LIB, ONLY: omp_get_max_threads, omp_get_thread_num, omp_get_num_threads, OMP_IN_PARALLEL
@@ -47,7 +44,7 @@ MODULE dbcsr_dist_methods
    CHARACTER(len=*), PARAMETER, PRIVATE :: moduleN = 'dbcsr_dist_methods'
 
    PUBLIC :: dbcsr_distribution_new, dbcsr_distribution_hold, &
-             dbcsr_distribution_release, dbcsr_distribution_init, &
+             dbcsr_distribution_release, &
              dbcsr_distribution_mp, dbcsr_distribution_processor, &
              dbcsr_distribution_nrows, dbcsr_distribution_ncols, &
              dbcsr_distribution_row_dist, dbcsr_distribution_col_dist, &
@@ -115,26 +112,36 @@ CONTAINS
       CALL array_nullify(dist%d%row_dist_cluster)
       IF (PRESENT(row_dist_cluster)) THEN
          IF (ASSOCIATED(row_dist_cluster)) THEN
-            ! check against the case where there are more clusters than blocks
-            IF (SIZE(row_dist_cluster) .GE. lcmv) THEN
-               row_dist_tmp => row_dist_cluster
-               CALL array_new(dist%d%row_dist_cluster, row_dist_tmp, gift=reuse_arrays)
-               IF (SIZE(row_dist_cluster) /= SIZE(row_dist_block)) &
-                  CPABORT("Blocks and clusters size are different for row grid")
-               nclusters = MAXVAL(row_dist_cluster)
+            IF (dbcsr_cfg%use_mpi_exp) THEN
+               ! check against the case where there are more clusters than blocks
+               IF (SIZE(row_dist_cluster) .GE. lcmv) THEN
+                  row_dist_tmp => row_dist_cluster
+                  CALL array_new(dist%d%row_dist_cluster, row_dist_tmp, gift=reuse_arrays)
+                  IF (SIZE(row_dist_cluster) /= SIZE(row_dist_block)) &
+                     CPABORT("Blocks and clusters size are different for row grid")
+                  nclusters = MAXVAL(row_dist_cluster)
+               ENDIF
+            ELSE
+               CALL cp_warn(__LOCATION__, "Cannot use row cluster distribution "// &
+                            "without MPI RMA!!! Set 'USE_MPI_EXP T' in DBCSR section.")
             ENDIF
          ENDIF
       ENDIF
       CALL array_nullify(dist%d%col_dist_cluster)
       IF (PRESENT(col_dist_cluster)) THEN
          IF (ASSOCIATED(col_dist_cluster)) THEN
-            ! check against the case where there are more clusters than blocks
-            IF (SIZE(col_dist_cluster) .GE. lcmv) THEN
-               col_dist_tmp => col_dist_cluster
-               CALL array_new(dist%d%col_dist_cluster, col_dist_tmp, gift=reuse_arrays)
-               IF (SIZE(col_dist_cluster) /= SIZE(col_dist_block)) &
-                  CPABORT("Blocks and clusters size are different for column grid")
-               nclusters = MAX(nclusters, MAXVAL(col_dist_cluster))
+            IF (dbcsr_cfg%use_mpi_exp) THEN
+               ! check against the case where there are more clusters than blocks
+               IF (SIZE(col_dist_cluster) .GE. lcmv) THEN
+                  col_dist_tmp => col_dist_cluster
+                  CALL array_new(dist%d%col_dist_cluster, col_dist_tmp, gift=reuse_arrays)
+                  IF (SIZE(col_dist_cluster) /= SIZE(col_dist_block)) &
+                     CPABORT("Blocks and clusters size are different for column grid")
+                  nclusters = MAX(nclusters, MAXVAL(col_dist_cluster))
+               ENDIF
+            ELSE
+               CALL cp_warn(__LOCATION__, "Cannot use col cluster distribution "// &
+                            "without MPI RMA!!! Set 'USE_MPI_EXP T' in DBCSR section.")
             ENDIF
          ENDIF
       ENDIF
@@ -482,16 +489,16 @@ CONTAINS
 
       lcmv = lcm(nprows, npcols)
       num_images_1d = lcmv
-      IF (num_mult_images .GT. 1) THEN
-         num_images_1d = num_images_1d*num_mult_images
+      IF (dbcsr_cfg%num_mult_images .GT. 1) THEN
+         num_images_1d = num_images_1d*dbcsr_cfg%num_mult_images
          RETURN
       ENDIF
       IF (matrix_dense_size_1d .EQ. 0) RETURN
       !
-      IF (avg_elements_images .GT. 0) THEN
+      IF (dbcsr_cfg%avg_elements_images .GT. 0) THEN
          num_images_1d = num_images_1d* &
                          CEILING((DBLE(matrix_dense_size_1d)/num_images_1d)/ &
-                                 SQRT(DBLE(avg_elements_images)))
+                                 SQRT(DBLE(dbcsr_cfg%avg_elements_images)))
       ENDIF
       ! limiting # clusters to be close to # atoms
       IF (num_images_1d .GT. nblocks .AND. nblocks .GT. 0) THEN
@@ -617,11 +624,11 @@ CONTAINS
       INTEGER                                            :: block_size, block_size0, cur_block, &
                                                             group_size, i, last_row, nlrows, &
                                                             nrows, nthreads, row, t, t_cnt
-      INTEGER, ALLOCATABLE, DIMENSION(:)                 :: itemp1, itemp2, reorder, sorted_row_sizes
+      INTEGER, ALLOCATABLE, DIMENSION(:)                 :: reorder, sorted_row_sizes
       INTEGER, DIMENSION(:), POINTER                     :: lrows, td
-      LOGICAL                                            :: assigned, found, heap_error
+      LOGICAL                                            :: assigned, found
       REAL(kind=sp)                                      :: load_fraction, rn, soft_thr
-      TYPE(heap_t)                                       :: t_heap
+      TYPE(dbcsr_heap_type)                              :: t_heap
 
 !   ---------------------------------------------------------------------------
 
@@ -636,7 +643,7 @@ CONTAINS
 !$OMP     BARRIER
 !$OMP     MASTER
 
-      load_fraction = REAL(comm_thread_load)/100.0
+      load_fraction = REAL(dbcsr_cfg%comm_thread_load)/100.0
       IF (nthreads == 1) load_fraction = 1.0
 
       IF (.NOT. dist%d%has_thread_dist) THEN
@@ -662,16 +669,9 @@ CONTAINS
             ! The heap is used to distribute "leftover"rows to threads.
             ! Lefotver rows are those of the same size that can not be
             ! evenly distributed among all threads.
-            CALL heap_new(t_heap, nthreads-1)
+            CALL dbcsr_heap_new(t_heap, nthreads-1)
             ! We do not want thread 0 to be in the heap.
-            ALLOCATE (itemp1(1:nthreads-1))
-            ALLOCATE (itemp2(1:nthreads-1))
-            DO i = 1, nthreads-1
-               itemp1(i) = i
-               itemp2(i) = 0
-            ENDDO
-            CALL heap_fill(t_heap, itemp1, itemp2, heap_error)
-            DEALLOCATE (itemp1, itemp2)
+            CALL dbcsr_heap_fill(t_heap, (/(0, i=1, nthreads-1)/))
             ALLOCATE (sorted_row_sizes(nrows))
             ALLOCATE (reorder(nrows))
             sorted_row_sizes(:) = row_sizes(:)
@@ -711,14 +711,14 @@ CONTAINS
 
                !Leftover bocks
                DO i = last_row-block_size0-(nthreads-1)*block_size, last_row+1-group_size, -1
-                  CALL heap_get_first(t_heap, t, t_cnt, found, heap_error)
+                  CALL dbcsr_heap_get_first(t_heap, t, t_cnt, found)
                   t_cnt = t_cnt+cur_block
-                  CALL heap_reset_first(t_heap, t_cnt, heap_error)
+                  CALL dbcsr_heap_reset_first(t_heap, t_cnt)
                   td(reorder(i)) = t
                END DO
 
             END DO
-            CALL heap_release(t_heap)
+            CALL dbcsr_heap_release(t_heap)
             DEALLOCATE (sorted_row_sizes)
             DEALLOCATE (reorder)
          ELSE

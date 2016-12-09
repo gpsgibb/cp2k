@@ -55,7 +55,6 @@ CONTAINS
       CALL dbcsr_t_copy(tensor2, tensor2_tmp)
 
       dbcsr_t_equal = .TRUE.
-      MARK_USED(tensor2)
 
       CALL dbcsr_t_iterator_start(iter, tensor1)
 
@@ -63,6 +62,7 @@ CONTAINS
          CALL dbcsr_t_iterator_next_block(iter, ind_nd, blk, blk_size=blk_size)
          CALL dbcsr_t_get_block(tensor1, ind_nd, blk_data1)
          CALL dbcsr_t_get_block(tensor2_tmp, ind_nd, blk_data2)
+
          IF (.NOT. blocks_equal(blk_data1, blk_data2)) THEN
             dbcsr_t_equal = .FALSE.
          ENDIF
@@ -83,14 +83,14 @@ CONTAINS
       LOGICAL                                            :: blocks_equal
 
       SELECT CASE (block1%data_type)
-      CASE (dbcsr_type_real_4)
-         blocks_equal = MAXVAL(ABS(block1%r_sp%blk-block2%r_sp%blk)) .LT. 1.0E-12_real_4
       CASE (dbcsr_type_real_8)
          blocks_equal = MAXVAL(ABS(block1%r_dp%blk-block2%r_dp%blk)) .LT. 1.0E-12_real_8
-      CASE (dbcsr_type_complex_4)
-         blocks_equal = MAXVAL(ABS(block1%c_sp%blk-block2%c_sp%blk)) .LT. 1.0E-12_real_4
+      CASE (dbcsr_type_real_4)
+         blocks_equal = MAXVAL(ABS(block1%r_sp%blk-block2%r_sp%blk)) .LT. 1.0E-12_real_4
       CASE (dbcsr_type_complex_8)
          blocks_equal = MAXVAL(ABS(block1%c_dp%blk-block2%c_dp%blk)) .LT. 1.0E-12_real_8
+      CASE (dbcsr_type_complex_4)
+         blocks_equal = MAXVAL(ABS(block1%c_sp%blk-block2%c_sp%blk)) .LT. 1.0E-12_real_4
       END SELECT
 
    END FUNCTION

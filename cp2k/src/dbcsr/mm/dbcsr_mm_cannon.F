@@ -25,9 +25,8 @@ MODULE dbcsr_mm_cannon
                                               dbcsr_block_real_neg,&
                                               dbcsr_block_scale,&
                                               dbcsr_block_transpose_aa
-   USE dbcsr_config,                    ONLY: has_acc,&
-                                              use_comm_thread,&
-                                              use_mpi_exp
+   USE dbcsr_config,                    ONLY: dbcsr_cfg,&
+                                              has_acc
    USE dbcsr_data_methods,              ONLY: &
         dbcsr_data_clear_pointer, dbcsr_data_ensure_size, dbcsr_data_get_size, &
         dbcsr_data_get_size_referenced, dbcsr_data_hold, dbcsr_data_host2dev, dbcsr_data_init, &
@@ -59,7 +58,7 @@ MODULE dbcsr_mm_cannon
    USE dbcsr_methods,                   ONLY: &
         dbcsr_destroy_array, dbcsr_distribution, dbcsr_get_data_type, dbcsr_get_index_memory_type, &
         dbcsr_has_symmetry, dbcsr_image_dist_hold, dbcsr_image_dist_init, &
-        dbcsr_image_dist_release, dbcsr_init, dbcsr_nblkcols_local, dbcsr_nblkrows_local, &
+        dbcsr_image_dist_release, dbcsr_nblkcols_local, dbcsr_nblkrows_local, &
         dbcsr_nblkrows_total, dbcsr_release, dbcsr_valid_index
    USE dbcsr_mm_common,                 ONLY: &
         acc_transpose_blocks, count_mpi_statistics, dbcsr_mm_multrec_type_p, dbcsr_mpi_statistics, &
@@ -217,7 +216,7 @@ CONTAINS
             CALL dbcsr_reset_vlocals(m2s%mats(i, j), rdist)
             ! Crop if necessary
             IF (ANY(f_crop .NE. 0)) THEN
-               CALL dbcsr_init(matrix_tmp)
+               matrix_tmp = dbcsr_obj()
                CALL dbcsr_crop_matrix(matrix_tmp, m2s%mats(i, j), &
                                       full_row_bounds=f_crop(1:2), &
                                       full_column_bounds=f_crop(3:4), &
@@ -231,7 +230,7 @@ CONTAINS
       ENDDO
 
       IF (ab_dense) THEN
-         CALL dbcsr_init(dense_template)
+         dense_template = dbcsr_obj()
          CALL dbcsr_create(dense_template, template=matrix, &
                            dist=dense_rdist%i%main, &
                            row_blk_size=array_data(row_blk_size), col_blk_size=array_data(col_blk_size))
@@ -286,7 +285,7 @@ CONTAINS
 
 !   ---------------------------------------------------------------------------
 
-      IF (use_mpi_exp) &
+      IF (dbcsr_cfg%use_mpi_exp) &
          CPABORT("RMA algo not supported here!")
       IF (.NOT. dbcsr_valid_index(source)) &
          CPABORT("Matrix not initialized.")
@@ -446,7 +445,7 @@ CONTAINS
       data_memory_type = memtype_abpanel_1
       DO row_img = 1, nrow_images
          DO col_img = 1, ncol_images
-            CALL dbcsr_init(ums%mats(row_img, col_img))
+            ums%mats(row_img, col_img) = dbcsr_obj()
             CALL dbcsr_create(ums%mats(row_img, col_img), "imaged "//sm%name, &
                               target_dist, &
                               dbcsr_type_no_symmetry, array_data(sm%row_blk_size), array_data(sm%col_blk_size), &
@@ -838,9 +837,9 @@ CONTAINS
             ! The old matrix has to be remembered so it is copied to
             ! tmp_mat.
             old_meta(:) = images%mats(mat_row, mat_col)%m%index(1:dbcsr_meta_size)
-            CALL dbcsr_init(tmp_mat)
+            tmp_mat = dbcsr_obj()
             tmp_mat = images%mats(mat_row, mat_col)
-            CALL dbcsr_init(images%mats(mat_row, mat_col))
+            images%mats(mat_row, mat_col) = dbcsr_obj()
             CALL dbcsr_create(images%mats(mat_row, mat_col), template=new_template)
             images%mats(mat_row, mat_col)%m%index(dbcsr_slot_home_prow &
                                                   :dbcsr_slot_home_vpcol) = &
@@ -1668,7 +1667,7 @@ CONTAINS
 !$OMP         keep_sparsity,threads_finished, &
 !$OMP         right_data_sr, right_data_rr, right_index_sr, right_index_rr, &
 !$OMP         left_data_sr, left_data_rr, left_index_sr, left_index_rr, &
-!$OMP         use_comm_thread) &
+!$OMP         dbcsr_cfg) &
 !$OMP PRIVATE (ithread,nthreads,threads_finished_read) &
 !$OMP FIRSTPRIVATE (metronome, nsteps_k, min_nimages) &
 !$OMP REDUCTION (+: flop_single)
@@ -1691,7 +1690,7 @@ CONTAINS
 
 !$OMP ATOMIC
             threads_finished = threads_finished+1
-            IF (use_comm_thread .AND. (ithread .EQ. 0)) THEN
+            IF (dbcsr_cfg%use_comm_thread .AND. (ithread .EQ. 0)) THEN
                DO
 ! requires OMP 3.1 (e.g. gcc >=4.7), for correctness, otherwise we keep fingers crossed
 #if defined _OPENMP && _OPENMP >= 200711

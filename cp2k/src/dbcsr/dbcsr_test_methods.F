@@ -22,7 +22,6 @@ MODULE dbcsr_test_methods
                                               dbcsr_block_transpose,&
                                               dbcsr_data_clear,&
                                               dbcsr_data_set
-   USE dbcsr_config,                    ONLY: randmat_counter
    USE dbcsr_data_methods,              ONLY: &
         dbcsr_data_clear_pointer, dbcsr_data_get_sizes, dbcsr_data_get_type, dbcsr_data_init, &
         dbcsr_data_new, dbcsr_data_release, dbcsr_scalar, dbcsr_scalar_negative, dbcsr_scalar_one, &
@@ -37,7 +36,6 @@ MODULE dbcsr_test_methods
                                               dbcsr_iterator_start,&
                                               dbcsr_iterator_stop
    USE dbcsr_methods,                   ONLY: dbcsr_get_matrix_type,&
-                                              dbcsr_init,&
                                               dbcsr_max_col_size,&
                                               dbcsr_max_row_size,&
                                               dbcsr_nblkcols_total,&
@@ -79,6 +77,8 @@ MODULE dbcsr_test_methods
              dbcsr_test_read_args, atoi, atol, ator
 
    CHARACTER(len=*), PARAMETER, PRIVATE :: moduleN = 'dbcsr_test_methods'
+
+   INTEGER, PRIVATE, SAVE :: randmat_counter = 12341313
 
 CONTAINS
 
@@ -412,7 +412,6 @@ CONTAINS
          CALL dbcsr_make_null_dist(new_dist, SIZE(row_blk_sizes), &
                                    SIZE(col_blk_sizes), group=mp_group)
       ENDIF
-      CALL dbcsr_init(matrix)
       my_data_type = dbcsr_type_real_default
       IF (PRESENT(data_type)) my_data_type = data_type
       my_symmetry = dbcsr_type_no_symmetry

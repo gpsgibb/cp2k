@@ -3,6 +3,11 @@
 !   Copyright (C) 2000 - 2016  CP2K developers group                                               !
 !--------------------------------------------------------------------------------------------------!
 
+!--------------------------------------------------------------------------------------------------!
+! Generated from dbcsr_tensor_types.fypp using Fypp.                                               !
+! **DO NOT** modify this file, edit dbcsr_tensor_types.fypp instead.                               !
+!--------------------------------------------------------------------------------------------------!
+
 ! **************************************************************************************************
 !> \brief DBCSR tensor framework for block-sparse tensor contraction: Types and create/destroy
 !>        routines.
@@ -17,14 +22,16 @@ MODULE dbcsr_tensor_types
                                               sizes_of_arrays,&
                                               sum_of_arrays
    USE dbcsr_api,                       ONLY: &
-        dbcsr_create, dbcsr_distribution_new, dbcsr_distribution_obj, dbcsr_distribution_release, &
-        dbcsr_finalize, dbcsr_get_data_type, dbcsr_init, dbcsr_mp_new, dbcsr_mp_obj, &
-        dbcsr_mp_release, dbcsr_obj, dbcsr_release
-   USE dbcsr_tensor_index,              ONLY: get_2d_indices,&
-                                              get_nd_indices
-   USE dbcsr_tensor_index_types,        ONLY: create_nd_to_2d_mapping,&
+        dbcsr_col_block_sizes, dbcsr_create, dbcsr_distribution, dbcsr_distribution_col_dist, &
+        dbcsr_distribution_mp, dbcsr_distribution_new, dbcsr_distribution_obj, &
+        dbcsr_distribution_release, dbcsr_distribution_row_dist, dbcsr_finalize, &
+        dbcsr_get_data_type, dbcsr_mp_group, dbcsr_mp_new, dbcsr_mp_obj, dbcsr_mp_release, &
+        dbcsr_name, dbcsr_obj, dbcsr_release, dbcsr_row_block_sizes
+   USE dbcsr_tensor_index,              ONLY: create_nd_to_2d_mapping,&
                                               destroy_nd_to_2d_mapping,&
+                                              get_2d_indices,&
                                               get_mapping_info,&
+                                              get_nd_indices,&
                                               nd_to_2d_mapping
    USE kinds,                           ONLY: default_string_length
    USE message_passing,                 ONLY: mp_cart_create,&
@@ -51,13 +58,13 @@ MODULE dbcsr_tensor_types
       ndims_tensor
 
    TYPE dbcsr_t_type
-      TYPE(dbcsr_obj)                               :: matrix_rep
-      TYPE(nd_to_2d_mapping)                        :: nd_index_blk
-      TYPE(nd_to_2d_mapping)                        :: nd_index
-      TYPE(array_list)                              :: blk_sizes
-      TYPE(array_list)                              :: blk_offsets
-      LOGICAL                                       :: valid = .FALSE.
-      CHARACTER(LEN=default_string_length)          :: name
+      TYPE(dbcsr_obj)                      :: matrix_rep
+      TYPE(nd_to_2d_mapping)               :: nd_index_blk
+      TYPE(nd_to_2d_mapping)               :: nd_index
+      TYPE(array_list)                     :: blk_sizes
+      TYPE(array_list)                     :: blk_offsets
+      LOGICAL                              :: valid = .FALSE.
+      CHARACTER(LEN=default_string_length) :: name
    END TYPE dbcsr_t_type
 
    TYPE dbcsr_t_distribution_type
@@ -82,18 +89,14 @@ CONTAINS
 !> \param nd_dist_2 distribution vector for second dimension
 !> \param nd_dist_3 ...
 !> \param nd_dist_4 ...
-!> \param nd_dist_5 ...
-!> \param nd_dist_6 ...
 ! **************************************************************************************************
-   SUBROUTINE dbcsr_t_distribution_new(dist, comm, map1_2d, map2_2d, nd_dist_1, nd_dist_2, nd_dist_3, &
-                                       nd_dist_4, nd_dist_5, nd_dist_6)
+   SUBROUTINE dbcsr_t_distribution_new(dist, comm, map1_2d, map2_2d, nd_dist_1, nd_dist_2, nd_dist_3, nd_dist_4)
 
       TYPE(dbcsr_t_distribution_type), INTENT(OUT)       :: dist
       INTEGER, INTENT(IN)                                :: comm
       INTEGER, DIMENSION(:), INTENT(IN)                  :: map1_2d, map2_2d
-      INTEGER, ALLOCATABLE, DIMENSION(:), &
-         INTENT(INOUT), OPTIONAL                         :: nd_dist_1, nd_dist_2, nd_dist_3, &
-                                                            nd_dist_4, nd_dist_5, nd_dist_6
+      INTEGER, DIMENSION(:), INTENT(IN), OPTIONAL        :: nd_dist_1, nd_dist_2, nd_dist_3, &
+                                                            nd_dist_4
 
       INTEGER                                            :: bcol, brow, comm_2d, mynode, ndims, &
                                                             numnodes, pcol, prow
@@ -107,10 +110,10 @@ CONTAINS
       TYPE(dbcsr_mp_obj)                                 :: mp_env
       TYPE(nd_to_2d_mapping)                             :: map_blks, map_grid
 
-      ndims = SIZE(dims)
-      CPASSERT(ndims .GE. 3 .AND. ndims .LE. 6)
+      ndims = SIZE(map1_2d)+SIZE(map2_2d)
+      CPASSERT(ndims .GE. 2 .AND. ndims .LE. 4)
 
-      CALL create_array_list(nd_dist, nd_dist_1, nd_dist_2, nd_dist_3, nd_dist_4, nd_dist_5, nd_dist_6, ndims)
+      CALL create_array_list(nd_dist, ndims, nd_dist_1, nd_dist_2, nd_dist_3, nd_dist_4)
 
       nblks_nd(:) = sizes_of_arrays(nd_dist)
 
@@ -195,30 +198,26 @@ CONTAINS
 !> \param blk_size_2 ...
 !> \param blk_size_3 ...
 !> \param blk_size_4 ...
-!> \param blk_size_5 ...
-!> \param blk_size_6 ...
 ! **************************************************************************************************
    SUBROUTINE dbcsr_t_create_new(tensor, name, dist, map1_2d, map2_2d, data_type, &
-                                 blk_size_1, blk_size_2, blk_size_3, &
-                                 blk_size_4, blk_size_5, blk_size_6)
+                                 blk_size_1, blk_size_2, blk_size_3, blk_size_4)
       TYPE(dbcsr_t_type), INTENT(OUT)                    :: tensor
       CHARACTER(len=*), INTENT(IN)                       :: name
       TYPE(dbcsr_t_distribution_type), INTENT(INOUT)     :: dist
       INTEGER, DIMENSION(:), INTENT(IN)                  :: map1_2d, map2_2d
       INTEGER, INTENT(IN), OPTIONAL                      :: data_type
-      INTEGER, ALLOCATABLE, DIMENSION(:), INTENT(IN), &
-         OPTIONAL                                        :: blk_size_1, blk_size_2, blk_size_3, &
-                                                            blk_size_4, blk_size_5, blk_size_6
+      INTEGER, DIMENSION(:), INTENT(IN), OPTIONAL        :: blk_size_1, blk_size_2, blk_size_3, &
+                                                            blk_size_4
 
-      INTEGER                                            :: icol, imap, irow
+      INTEGER                                            :: icol, imap, irow, ndims
       INTEGER, DIMENSION(2)                              :: dims_2d
       INTEGER, DIMENSION(3)                              :: blk_dims, dims, nd_ind
       INTEGER, DIMENSION(:), POINTER                     :: col_blk_size, row_blk_size
       TYPE(array_list)                                   :: blk_size
       TYPE(nd_to_2d_mapping)                             :: map
 
-      CALL create_array_list(blk_size, blk_size_1, blk_size_2, blk_size_3, blk_size_4, blk_size_5, blk_size_6, &
-                             SIZE(map1_2d)+SIZE(map2_2d))
+      ndims = SIZE(map1_2d)+SIZE(map2_2d)
+      CALL create_array_list(blk_size, ndims, blk_size_1, blk_size_2, blk_size_3, blk_size_4)
       dims = sizes_of_arrays(blk_size)
 
       CALL create_nd_to_2d_mapping(map, dims, map1_2d, map2_2d)
@@ -247,7 +246,6 @@ CONTAINS
          ENDDO
       ENDDO
 
-      CALL dbcsr_init(tensor%matrix_rep)
       CALL dbcsr_create(matrix=tensor%matrix_rep, &
                         name=name//"_matrix_rep", &
                         dist=dist%dist, &
@@ -277,20 +275,72 @@ CONTAINS
 !> \brief create a tensor from template
 !> \param tensor_in ...
 !> \param tensor ...
+!> \param name ...
 ! **************************************************************************************************
-   SUBROUTINE dbcsr_t_create_template(tensor_in, tensor)
+   SUBROUTINE dbcsr_t_create_template(tensor_in, tensor, name)
       TYPE(dbcsr_t_type), INTENT(INOUT)                  :: tensor_in
       TYPE(dbcsr_t_type), INTENT(OUT)                    :: tensor
+      CHARACTER(len=*), INTENT(IN), OPTIONAL             :: name
 
-      CALL dbcsr_init(tensor%matrix_rep)
       CALL dbcsr_create(tensor%matrix_rep, tensor_in%matrix_rep)
+      CALL dbcsr_finalize(tensor%matrix_rep)
 
       tensor%nd_index_blk = tensor_in%nd_index_blk
       tensor%nd_index = tensor_in%nd_index
       tensor%blk_sizes = tensor_in%blk_sizes
       tensor%blk_offsets = tensor_in%blk_offsets
       tensor%valid = .TRUE.
-      tensor%name = tensor_in%name
+      IF (PRESENT(name)) THEN
+         tensor%name = name
+      ELSE
+         tensor%name = tensor_in%name
+      ENDIF
+   END SUBROUTINE
+
+! **************************************************************************************************
+!> \brief ...
+!> \param matrix_in ...
+!> \param tensor ...
+!> \param order ...
+!> \param name ...
+! **************************************************************************************************
+   SUBROUTINE dbcsr_t_create_matrix(matrix_in, tensor, order, name)
+      TYPE(dbcsr_obj), INTENT(IN)                        :: matrix_in
+      TYPE(dbcsr_t_type), INTENT(OUT)                    :: tensor
+      INTEGER, DIMENSION(2), INTENT(IN), OPTIONAL        :: order
+      CHARACTER(len=*), INTENT(IN), OPTIONAL             :: name
+
+      CHARACTER(len=default_string_length)               :: name_in
+      INTEGER, DIMENSION(2)                              :: order_in
+      TYPE(dbcsr_distribution_obj)                       :: matrix_dist
+      TYPE(dbcsr_t_distribution_type)                    :: dist
+
+      IF (PRESENT(name)) THEN
+         name_in = name
+      ELSE
+         name_in = dbcsr_name(matrix_in)
+      ENDIF
+
+      IF (PRESENT(order)) THEN
+         order_in = order
+      ELSE
+         order_in = [1, 2]
+      ENDIF
+
+      matrix_dist = dbcsr_distribution(matrix_in)
+
+      CALL dbcsr_t_distribution_new( &
+         dist, &
+         dbcsr_mp_group(dbcsr_distribution_mp(matrix_dist)), &
+         [order_in(1)], [order_in(2)], &
+         dbcsr_distribution_row_dist(matrix_dist), &
+         dbcsr_distribution_col_dist(matrix_dist))
+
+      CALL dbcsr_t_create_new(tensor, name_in, dist, &
+                              [order_in(1)], [order_in(2)], &
+                              dbcsr_get_data_type(matrix_in), &
+                              dbcsr_row_block_sizes(matrix_in), &
+                              dbcsr_col_block_sizes(matrix_in))
    END SUBROUTINE
 
 ! **************************************************************************************************

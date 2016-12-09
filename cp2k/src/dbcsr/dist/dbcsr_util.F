@@ -28,7 +28,6 @@ MODULE dbcsr_util
    USE dbcsr_methods,                   ONLY: dbcsr_blk_col_offset,&
                                               dbcsr_blk_row_offset,&
                                               dbcsr_has_symmetry,&
-                                              dbcsr_is_initialized,&
                                               dbcsr_valid_index
    USE dbcsr_mp_methods,                ONLY: dbcsr_mp_group,&
                                               dbcsr_mp_mypcol,&
@@ -677,8 +676,6 @@ CONTAINS
 !   ---------------------------------------------------------------------------
 
     CALL timeset(routineN, handle)
-    IF(.NOT.dbcsr_is_initialized(m))&
-       CPABORT("Can not verify non-existing matrix object.")
     dbg = 2
     nocomm = .FALSE.
     IF (PRESENT (local)) nocomm = local
@@ -800,8 +797,8 @@ CONTAINS
        CALL mp_sum(n_have_blocks_local, dbcsr_mp_group (dbcsr_distribution_mp (&
             m%m%dist)))
        n_have_blocks_total = n_have_blocks_local
-       sparsity_total = REAL(n_have_blocks_total)&
-            / REAL(n_full_blocks_total)*100.0
+       sparsity_total = REAL(n_have_blocks_total, KIND=dp)&
+            / REAL(n_full_blocks_total, KIND=dp)*100.0_dp
        !WRITE(*,FMT='(30A,F5.1,A)')r//' Sparsity: ', sparsity_total,'%'
        WRITE(*,FMT='(1X,A,F5.1,A)')r//' Non-sparsity: ',&
             sparsity_total,'%'

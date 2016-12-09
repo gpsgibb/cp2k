@@ -12,7 +12,6 @@
 PROGRAM dbcsr_tensor_unittest
    USE dbcsr_api,                       ONLY: dbcsr_finalize_lib,&
                                               dbcsr_init_lib,&
-                                              dbcsr_set_default_config,&
                                               dbcsr_type_real_8
    USE dbcsr_tensor,                    ONLY: &
         dbcsr_t_get_block, dbcsr_t_get_stored_coordinates, dbcsr_t_iterator, &
@@ -57,7 +56,6 @@ PROGRAM dbcsr_tensor_unittest
 
    ! initialize libdbcsr
    CALL dbcsr_init_lib()
-   CALL dbcsr_set_default_config()
 
    ! set standard output parameters
    io_unit = 0
@@ -96,7 +94,9 @@ PROGRAM dbcsr_tensor_unittest
    CALL allocate_and_fill_test_tensor(tensor2, blk_ind_1, blk_ind_2, blk_ind_3, mynode)
 
    eql = dbcsr_t_equal(tensor1, tensor2)
-   IF (.NOT. eql) CPABORT("Tensors are not the same ;-(")
+   IF (.NOT. eql) THEN
+      CPABORT("Tensors are not the same ;-(")
+   ENDIF
 
    DEALLOCATE (dist1_1, dist1_2, dist1_3, dist2_1, dist2_2, dist2_3, size_1, size_2, size_3, blk_ind_1, blk_ind_2, blk_ind_3)
 
