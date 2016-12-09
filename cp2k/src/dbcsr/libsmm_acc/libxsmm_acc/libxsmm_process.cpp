@@ -201,14 +201,24 @@ private:
     static float alpha = 1.f, beta = 1.f;
     static char trans = 'N';
     int im = static_cast<int>(m), in = static_cast<int>(n), ik = static_cast<int>(k), ildc = static_cast<int>(ldc);
-    LIBXSMM_ACC_FSYMBOL(sgemm)(&trans, &trans, &im, &in, &ik, &alpha, const_cast<float*>(a), &im, const_cast<float*>(b), &ik, &beta, c, &ildc);
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+    LIBXSMM_BLAS_GEMM_SYMBOL(float) // original symbol, which avoids to go through the wrapper
+#else
+    LIBXSMM_ACC_FSYMBOL(sgemm)
+#endif
+      (&trans, &trans, &im, &in, &ik, &alpha, const_cast<float*>(a), &im, const_cast<float*>(b), &ik, &beta, c, &ildc);
   }
 
   static void blasmm(U m, U n, U k, U ldc, const double* a, const double* b, double* c) {
     static double alpha = 1.0, beta = 1.0;
     static char trans = 'N';
     int im = static_cast<int>(m), in = static_cast<int>(n), ik = static_cast<int>(k), ildc = static_cast<int>(ldc);
-    LIBXSMM_ACC_FSYMBOL(dgemm)(&trans, &trans, &im, &in, &ik, &alpha, const_cast<double*>(a), &im, const_cast<double*>(b), &ik, &beta, c, &ildc);
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+    LIBXSMM_BLAS_GEMM_SYMBOL(double) // original symbol, which avoids to go through the wrapper
+#else
+    LIBXSMM_ACC_FSYMBOL(dgemm)
+#endif
+      (&trans, &trans, &im, &in, &ik, &alpha, const_cast<double*>(a), &im, const_cast<double*>(b), &ik, &beta, c, &ildc);
   }
 };
 
