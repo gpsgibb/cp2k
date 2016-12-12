@@ -81,6 +81,10 @@ OFFLOAD ?= 0
 NESTED ?= 0
 ELPA ?= 3
 
+# CP2K's configuation namespace (prefix)
+#
+CONFIG_PREFIX = dbcsr_config_mp_
+
 ifneq (0,$(OMP))
   MKL ?= 2
 else ifneq (0,$(MPI))
@@ -551,11 +555,8 @@ else # this is not the CP2K/intel branch
   RECONFIGURE = 0
 endif
 ifneq (0,$(RECONFIGURE))
-  DFLAGS  += -D__RECONFIGURE
-  LDFLAGS += -Wl,--wrap=dbcsr_config_mp_dbcsr_set_conf_mm_driver_
-  LDFLAGS += -Wl,--wrap=dbcsr_config_mp_dbcsr_set_conf_comm_thread_load_
-  LDFLAGS += -Wl,--wrap=dbcsr_config_mp_dbcsr_set_conf_mm_stacksize_
-  LDFLAGS += -Wl,--wrap=dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp_
+  DFLAGS  += -DCP2K_CONFIG_PREFIX=$(CONFIG_PREFIX)
+  LDFLAGS += -Wl,--wrap=$(CONFIG_PREFIX)dbcsr_get_default_config_
   DIAG_DISABLE := $(DIAG_DISABLE),11021
 endif
 

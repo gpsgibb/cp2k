@@ -45,6 +45,7 @@
 # else /*legacy*/
 #   define LIBXSMM_ACC_EXTERN LIBXSMM_EXTERN_C
 # endif
+# define LIBXSMM_ACC_CONCATENATE LIBXSMM_CONCATENATE
 # define LIBXSMM_ACC_FSYMBOL LIBXSMM_FSYMBOL
 # define LIBXSMM_ACC_UNUSED LIBXSMM_UNUSED
 # define LIBXSMM_ACC_MOD2 LIBXSMM_MOD2
@@ -74,6 +75,7 @@
 # define LIBXSMM_ACC_LOOP_AVG_N 23
 # define LIBXSMM_ACC_RESTRICT LIBXSTREAM_RESTRICT
 # define LIBXSMM_ACC_EXTERN LIBXSTREAM_EXTERN_C
+# define LIBXSMM_ACC_CONCATENATE LIBXSTREAM_CONCATENATE
 # define LIBXSMM_ACC_FSYMBOL LIBXSTREAM_FSYMBOL
 # define LIBXSMM_ACC_UNUSED LIBXSTREAM_UNUSED
 # define LIBXSMM_ACC_MOD2 LIBXSTREAM_MOD2
@@ -86,6 +88,7 @@
 #endif
 
 #define LIBXSMM_ACC_ABORT(MESSAGE) xsmm_acc_abort(__FILE__, __LINE__, MESSAGE)
+#define LIBXSMM_ACC_FTYPE_LOGICAL int
 
 
 /** Upper limits for the supported matrix sizes. */
@@ -140,7 +143,59 @@
 # define LIBXSMM_ACC_SYNCHRONIZATION 16
 #endif
 
-#if defined(__RECONFIGURE)
+#if defined(CP2K_CONFIG_PREFIX)
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_XDECL(KIND, DELIM) \
+    LIBXSMM_ACC_FTYPE_LOGICAL KIND use_MPI_memory DELIM \
+    int KIND mm_stack_size DELIM \
+    int KIND avg_elements_images DELIM \
+    int KIND num_mult_images DELIM \
+    int KIND nstacks DELIM \
+    LIBXSMM_ACC_FTYPE_LOGICAL KIND use_mpi_exp DELIM \
+    LIBXSMM_ACC_FTYPE_LOGICAL KIND use_mpi_filtering DELIM \
+    int KIND num_layers_3D DELIM \
+    LIBXSMM_ACC_FTYPE_LOGICAL KIND use_comm_thread DELIM \
+    int KIND comm_thread_load DELIM \
+    int KIND multrec_limit DELIM \
+    int KIND accdrv_priority_streams DELIM \
+    int KIND accdrv_priority_buffers DELIM \
+    int KIND accdrv_posterior_streams DELIM \
+    int KIND accdrv_posterior_buffers DELIM \
+    LIBXSMM_ACC_FTYPE_LOGICAL KIND accdrv_avoid_after_busy DELIM \
+    int KIND accdrv_min_flop_process DELIM \
+    int KIND accdrv_min_flop_sort DELIM \
+    LIBXSMM_ACC_FTYPE_LOGICAL KIND accdrv_do_inhomogenous DELIM \
+    int KIND accdrv_binning_nbins DELIM \
+    int KIND accdrv_binning_binsize
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_XCALL(KIND) \
+    KIND use_MPI_memory, \
+    KIND mm_stack_size, \
+    KIND avg_elements_images, \
+    KIND num_mult_images, \
+    KIND nstacks, \
+    KIND use_mpi_exp, \
+    KIND use_mpi_filtering, \
+    KIND num_layers_3D, \
+    KIND use_comm_thread, \
+    KIND comm_thread_load, \
+    KIND multrec_limit, \
+    KIND accdrv_priority_streams, \
+    KIND accdrv_priority_buffers, \
+    KIND accdrv_posterior_streams, \
+    KIND accdrv_posterior_buffers, \
+    KIND accdrv_avoid_after_busy, \
+    KIND accdrv_min_flop_process, \
+    KIND accdrv_min_flop_sort, \
+    KIND accdrv_do_inhomogenous, \
+    KIND accdrv_binning_nbins, \
+    KIND accdrv_binning_binsize
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_VALUE_KIND
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_DELIM_COMMA ,
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_DELIM_SEMICOLON ;
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_DECL LIBXSMM_ACC_CONFIG_SIGNATURE_XDECL(*, LIBXSMM_ACC_CONFIG_SIGNATURE_DELIM_COMMA)
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_VALS LIBXSMM_ACC_CONFIG_SIGNATURE_XDECL(LIBXSMM_ACC_CONFIG_SIGNATURE_VALUE_KIND, LIBXSMM_ACC_CONFIG_SIGNATURE_DELIM_SEMICOLON)
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_NOCALL
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_USE LIBXSMM_ACC_CONFIG_SIGNATURE_XCALL(LIBXSMM_ACC_CONFIG_SIGNATURE_NOCALL)
+# define LIBXSMM_ACC_CONFIG_SIGNATURE_CALL LIBXSMM_ACC_CONFIG_SIGNATURE_XCALL(&)
 # define LIBXSMM_ACC_MM_DRIVER 4 /*mm_driver_xsmm*/
 # define LIBXSMM_ACC_STACKSIZE 1000000
 # define LIBXSMM_ACC_MULTREC_LIMIT 64
@@ -153,7 +208,7 @@
 #   define LIBXSMM_ACC_ACCDRV_MIN_MFLOPS_PERSTACK 120
 #   define LIBXSMM_ACC_ACCDRV_MIN_NFLOPS_PERMM 0
 # endif
-#endif // defined(__RECONFIGURE)
+#endif // defined(CP2K_CONFIG_PREFIX)
 
 /*#define LIBXSMM_ACC_PRETRANSPOSE*/
 /*#define LIBXSMM_ACC_MKLTRANS*/

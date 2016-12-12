@@ -34,9 +34,8 @@ LIBXSMM_ACC_EXTERN LIBXSMM_ACC_RETARGETABLE void LIBXSMM_ACC_FSYMBOL(sgemm)(
   const float*, const float*, const int*, const float*, const int*,
   const float*, float*, const int*);
 
-#if defined(LIBXSMM_ACC_SORT)
-extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_binning_binsize);
-extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_binning_nbins);
+#if defined(CP2K_CONFIG_PREFIX) && defined(LIBXSMM_ACC_SORT)
+void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_DECL);
 #endif
 
 
@@ -263,7 +262,6 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
 #endif
       {
         i += N; // next
-
         if (i < nstacksize) {
           LIBXSMM_ACC_ASSUME_ALIGNED(pnxt, LIBXSMM_ACC_ALIGNMENT);
           for (U j = 0; j < LIBXSMM_ACC_PARAM_COUNT; ++j) pnxt[j] = stack[i+j];
@@ -292,7 +290,6 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
 #endif
         }
       }
-
 #if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL))) || (1 < (LIBXSMM_ACC_ALIGNED_STORES))
       smm.copy_c(tmp, ci, pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], ldc);
 #endif
@@ -305,28 +302,42 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
 }
 
 
-#if defined(LIBXSMM_ACC_SORT)
-const char *const sort_env_str = getenv("CP2K_SORT");
-const int sort_env = ((sort_env_str && *sort_env_str) ? atoi(sort_env_str) : 0);
-
-LIBXSMM_ACC_RETARGETABLE bool less(const libxsmm_acc_param_type& a, const libxsmm_acc_param_type& b)
-{
-  return a.component.ic < b.component.ic;
-}
-
-LIBXSMM_ACC_RETARGETABLE void sort(libxsmm_acc_param_type* stack, size_t stacksize, size_t min_grain, size_t max_nbins)
-{
-  const size_t size2 = (stacksize >> 1), nbins2 = (max_nbins >> 1);
-  libxsmm_acc_param_type *const stack2 = stack + size2;
-
-  std::nth_element(stack, stack2, stack + stacksize, less);
-
-  if (min_grain < size2 && 1 < nbins2) {
-    sort(stack, size2, min_grain, nbins2);
-    sort(stack2, stacksize - size2, min_grain, nbins2);
+#if defined(CP2K_CONFIG_PREFIX) && defined(LIBXSMM_ACC_SORT)
+class LIBXSMM_ACC_RETARGETABLE sort_type {
+public:
+  sort_type(): binsize(static_cast<size_t>(-1)), nbins(static_cast<size_t>(-1)) {
+    const char *const env = getenv("CP2K_SORT");
+    if (env && *env && 0 != atoi(env)) {
+      LIBXSMM_ACC_CONFIG_SIGNATURE_VALS;
+      LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_CALL);
+      binsize = static_cast<size_t>(accdrv_binning_binsize);
+      nbins = static_cast<size_t>(accdrv_binning_nbins);
+    }
+    assert((static_cast<size_t>(-1) == binsize && static_cast<size_t>(-1) == nbins) ||
+           (static_cast<size_t>(-1) != binsize && static_cast<size_t>(-1) != nbins));
   }
-}
-#endif /*defined(LIBXSMM_ACC_SORT)*/
+  void operator()(libxsmm_acc_param_type* stack, size_t stacksize) const {
+    if (0 < binsize) run(stack, stacksize, binsize, nbins);
+  }
+
+private:
+  static bool less(const libxsmm_acc_param_type& a, const libxsmm_acc_param_type& b) {
+    return a.component.ic < b.component.ic;
+  }
+  static void run(libxsmm_acc_param_type* stack, size_t stacksize, size_t min_grain, size_t max_nbins) {
+    const size_t size2 = (stacksize >> 1), nbins2 = (max_nbins >> 1);
+    libxsmm_acc_param_type *const stack2 = stack + size2;
+    std::nth_element(stack, stack2, stack + stacksize, less);
+    if (min_grain < size2 && 1 < nbins2) {
+      run(stack, size2, min_grain, nbins2);
+      run(stack2, stacksize - size2, min_grain, nbins2);
+    }
+  }
+  size_t binsize, nbins;
+} sort;
+
+
+#endif /*defined(CP2K_CONFIG_PREFIX) && defined(LIBXSMM_ACC_SORT)*/
 
 
 template<size_t N, typename T, typename U>
@@ -336,12 +347,8 @@ LIBXSMM_ACC_RETARGETABLE void context(/*const*/ U* stack, const U* stacksize, co
 {
   const smm_type<T,U> smm(*def_mnk, *max_m, *max_n, *max_k);
   LIBXSMM_ACC_ASSERT(((LIBXSMM_ACC_NPARAMS) * sizeof(int)) == sizeof(libxsmm_acc_param_type));
-#if defined(LIBXSMM_ACC_SORT)
-  if (0 != sort_env) {
-    sort(reinterpret_cast<libxsmm_acc_param_type*>(stack), *stacksize,
-      LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_binning_binsize),
-      LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_binning_nbins));
-  }
+#if defined(CP2K_CONFIG_PREFIX) && defined(LIBXSMM_ACC_SORT)
+  sort(reinterpret_cast<libxsmm_acc_param_type*>(stack), *stacksize);
 #endif
   work<LIBXSMM_ACC_NPARAMS,T,U>(stack, *stacksize, smm, a, b, c);
   if (efficient) *efficient = static_cast<int>(smm.efficient());
@@ -357,7 +364,6 @@ int process(/*const*/ U* stack, U stacksize, U nparams, U def_mnk,
     0 != stack && 0 <= stacksize && LIBXSMM_ACC_NPARAMS == nparams &&
     0 <= max_m && 0 <= max_n && 0 <= max_k &&
     0 != a_data && 0 != b_data && 0 != c_data);
-
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
   const size_t shape = stacksize;
   libxstream_argument* signature = 0;
@@ -380,7 +386,6 @@ int process(/*const*/ U* stack, U stacksize, U nparams, U def_mnk,
     static_cast<const T*>(a_data), static_cast<const T*>(b_data), static_cast<T*>(c_data),
     static_cast<U*>(stream_or_boolean));
 #endif
-
   return LIBXSMM_ACC_ERROR_NONE;
 }
 
@@ -397,16 +402,14 @@ extern "C" int libsmm_acc_process(void* param_stack, int stacksize, int nparams,
 #if defined(LIBXSMM_ACC_PRETRANSPOSE)
   LIBXSMM_ACC_ASSERT(false/*TODO: implement C = A * B which is assuming that B is pre-transposed (B^T).*/);
 #endif
-#if defined(__RECONFIGURE) && defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
+#if defined(CP2K_CONFIG_PREFIX) && defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
   const int mflops = 0 != stream_or_boolean ? static_cast<int>(2E-6 * stacksize * max_m * max_n * max_k + 0.5) : LIBXSMM_ACC_ACCDRV_MIN_MFLOPS_PERSTACK;
   int result = (LIBXSMM_ACC_ACCDRV_MIN_MFLOPS_PERSTACK) <= mflops ? LIBXSMM_ACC_ERROR_NONE : LIBXSMM_ACC_NOT_SUPPORTED;
 #else
   int result = LIBXSMM_ACC_ERROR_NONE;
 #endif
-
   if (LIBXSMM_ACC_ERROR_NONE == result) {
     int *const stack = static_cast<int*>(param_stack);
-
     switch(static_cast<libxsmm_acc_elem_type>(datatype)) {
       case LIBXSMM_ACC_ELEM_F32: {
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
@@ -428,7 +431,6 @@ extern "C" int libsmm_acc_process(void* param_stack, int stacksize, int nparams,
         result = LIBXSMM_ACC_ERROR_CONDITION;
     }
   }
-
   return result;
 }
 

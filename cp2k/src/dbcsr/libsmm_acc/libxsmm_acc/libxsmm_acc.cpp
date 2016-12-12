@@ -20,10 +20,10 @@
 #if defined(_OPENMP)
 # include <omp.h>
 #endif
-#if defined(__MKL) || defined(MKL_DIRECT_CALL_SEQ) || defined(MKL_DIRECT_CALL)
+#if defined(CP2K_CONFIG_PREFIX) && (defined(__MKL) || defined(MKL_DIRECT_CALL_SEQ) || defined(MKL_DIRECT_CALL))
 # include <mkl_service.h>
 #endif
-#if defined(__TBBMALLOC)
+#if defined(CP2K_CONFIG_PREFIX) && defined(__TBBMALLOC)
 # include <tbb/scalable_allocator.h>
 #endif
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
@@ -40,31 +40,19 @@ namespace libxsmm_acc_private {
   void process_mm_stack(const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue, const T* a, const T* b, T* c, int* efficient/*Boolean*/)
   {
     int result = LIBXSMM_ACC_ERROR_CONDITION;
-
     if (0 != descriptor && 0 != params && 0 != myvalue && 0 != a && 0 != b && 0 != c) {
       result = libsmm_acc_process( // TODO: fix const-correctness in libsmm_acc.h
         params, *myvalue, LIBXSMM_ACC_NPARAMS, libxsmm_acc_elem<T,false>::type, const_cast<T*>(a), const_cast<T*>(b), c,
         descriptor->max_m, descriptor->max_n, descriptor->max_k, descriptor->defined_mnk, 0/*stream*/);
       if (efficient) *efficient = 1;
     }
-
     switch (result) {
       case LIBXSMM_ACC_ERROR_CONDITION: LIBXSMM_ACC_ABORT("incorrect argument(s)"); break;
       default: if (LIBXSMM_ACC_ERROR_NONE != result) LIBXSMM_ACC_ABORT("unknown error");
     }
   }
-
-  const char *const prefetch_env = getenv("CP2K_PREFETCH");
   const char *const reconf_env = getenv("CP2K_RECONFIGURE");
-  const bool explicit_configure = (reconf_env && *reconf_env);
-  const bool reconfigure = explicit_configure
-    ? 0 != atoi(reconf_env)
-#if defined(LIBXSMM_ACC_OFFLOAD_BUILD)
-    : true;
-#else
-    : false;
-#endif
-
+  const bool reconfigure = ((reconf_env && *reconf_env) ? 0 != atoi(reconf_env) : true);
 } // namespace libxsmm_acc_private
 
 
@@ -77,160 +65,132 @@ LIBXSMM_ACC_EXTERN void xsmm_acc_abort(const char* filename, int line_number, co
 }
 
 
-#if defined(__RECONFIGURE)
-LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(const int*);
+#if defined(CP2K_CONFIG_PREFIX)
 
-# if defined(__GNUC__)
+#if defined(__GNUC__)
 LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
-# else
+#else
 LIBXSMM_ACC_EXTERN
-# endif
-void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_mm_stacksize)(const int*);
-LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_mm_stacksize)(const int* value)
-{
-  int myvalue = value ? *value : -1;
-  if (!libxsmm_acc_private::explicit_configure || libxsmm_acc_private::reconfigure) {
-    const char *const env = getenv("CP2K_STACKSIZE");
-    if (env && *env) {
-      myvalue = atoi(env);
-#if defined(LIBXSMM_ACC_STACKSIZE)
-      if (0 >= myvalue) myvalue = LIBXSMM_ACC_STACKSIZE;
 #endif
+void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__real_, CP2K_CONFIG_PREFIX), dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_DECL);
+LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__wrap_, CP2K_CONFIG_PREFIX), dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_DECL)
+{
+  static bool initialized = false;
+  if (!initialized) {
+#if defined(__TBBMALLOC)
+    const char *const env_hugepages = getenv("CP2K_HUGEPAGES");
+    if (0 == env_hugepages || 0 == *env_hugepages || 0 != atoi(env_hugepages)) {
+      scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
     }
-  }
-  if (0 < myvalue) {
-    LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_mm_stacksize)(&myvalue);
-  }
-}
-
-
-# if defined(__GNUC__)
-LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
-# else
-LIBXSMM_ACC_EXTERN
-# endif
-void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_mm_driver)(const int*);
-LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_mm_driver)(const int* driver)
-{
-#if defined(_OPENMP) && defined(KMP_VERSION_MAJOR)
-  // setting the stacksize applies independent of nested parallelism (LIBXSMM_ACC_OPENMP)
-  //kmp_set_stacksize(52428800);
 #endif
-#if defined(MKL_ENABLE_AVX512) // only necessary for the version carrying KNL support for the first time
-  mkl_enable_instructions(MKL_ENABLE_AVX512);
+#if defined(_OPENMP) && defined(KMP_VERSION_MAJOR)
+    // setting the stacksize applies independent of nested parallelism (LIBXSMM_ACC_OPENMP)
+    //kmp_set_stacksize(52428800);
+#endif
+#if defined(MKL_ENABLE_AVX512)
+    mkl_enable_instructions(MKL_ENABLE_AVX512);
 #endif
 #if defined(__LIBXSMM)
-  // eventually pre-generate dispatch tables for any static code
-  libxsmm_init();
+    libxsmm_init();
 #endif
-
-#if defined(LIBXSMM_ACC_MM_DRIVER)
-  int mm_driver = LIBXSMM_ACC_MM_DRIVER;
-#else
-  LIBXSMM_ACC_ASSERT(driver);
-  int mm_driver = *driver;
-#endif
-
-  // better leave "CP2K_DRIVER" environment variable undocumented
-  // variable takes the internal literal/number representing MM driver
-  const char *const driver_env = getenv("CP2K_DRIVER");
-  if (driver_env && *driver_env) { // environment variable is present
-    mm_driver = atoi(driver_env);
+    // better leave "CP2K_DRIVER" environment variable undocumented
+    // variable takes the internal literal/number representing MM driver
+    const char *const env_driver = getenv("CP2K_DRIVER");
+    if (env_driver && *env_driver) {
+      extern int LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg));
+      LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg)) = atoi(env_driver);
+    }
+    initialized = true;
   }
 
-  // make sure to reconfigure *after* the original configuration procedure ran
-  LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_mm_driver)(&mm_driver);
-
-  // define stacksize as part of the MM driver config (otherwise it remains undefined)
-  LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_mm_stacksize)(NULL);
-
-  const char *const multrec_env = getenv("CP2K_MULTREC");
-  if (multrec_env && *multrec_env) { // environment variable is present
-    extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_multrec_limit);
-    int multrec_limit = atoi(multrec_env);
-    if (0 < multrec_limit) {
-      LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_multrec_limit) = multrec_limit;
-    }
-#if defined(LIBXSMM_ACC_MULTREC_LIMIT)
-    else {
-      LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_multrec_limit) = LIBXSMM_ACC_MULTREC_LIMIT;
-    }
-#endif
-  }
-
+  LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__real_, CP2K_CONFIG_PREFIX), dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_USE);
   if (libxsmm_acc_private::reconfigure) {
-#if defined(__TBBMALLOC)
-    const char *const env = getenv("CP2K_HUGEPAGES");
-    if (0 == env || 0 == *env || 0 != atoi(env)) {
-      scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
+    static const char *const env_stacksize = getenv("CP2K_STACKSIZE");
+    if (mm_stack_size && env_stacksize && *env_stacksize) {
+      const int value = atoi(env_stacksize);
+      if (0 < value) {
+        *mm_stack_size = value;
+      }
+#if defined(LIBXSMM_ACC_STACKSIZE)
+      else {
+        *mm_stack_size = LIBXSMM_ACC_STACKSIZE;
+      }
+#endif
+    }
+    static const char *const env_commtload = getenv("CP2K_COMMTLOAD");
+    if (env_commtload && *env_commtload) {
+      const int value = atoi(env_commtload);
+      if (comm_thread_load) {
+        if (0 <= value) {
+          if (0 < value) *comm_thread_load = value;
+        }
+#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD) && (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
+        else {
+          *comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
+        }
+#endif
+      }
+      if (use_comm_thread) {
+        if (0 == value) {
+          *use_comm_thread = 0;
+        }
+#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD) && (0 == LIBXSMM_ACC_COMM_THREAD_LOAD)
+        else if (0 > value) {
+          *use_comm_thread = 0;
+        }
+#endif
+      }
+    }
+    static const char *const env_multrec = getenv("CP2K_MULTREC");
+    if (multrec_limit && env_multrec && *env_multrec) {
+      const int value = atoi(env_multrec);
+      if (0 < value) {
+        *multrec_limit = value;
+      }
+#if defined(LIBXSMM_ACC_MULTREC_LIMIT)
+      else {
+        *multrec_limit = LIBXSMM_ACC_MULTREC_LIMIT;
+      }
+#endif
+    }
+#if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
+    static const char *const env_rma = getenv("CP2K_RMA");
+    if (env_rma && *env_rma) {
+      const int value = atoi(env_rma);
+      if (0 != value) {
+        if (use_mpi_filtering) *use_mpi_filtering = 0;
+        if (use_mpi_exp) *use_mpi_exp = 1;
+      }
     }
 #endif
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
 # if defined(LIBXSMM_ACC_ACCDRV_POSTERIOR_STREAMS)
-    extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_posterior_streams);
-    LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_posterior_streams) = LIBXSMM_ACC_ACCDRV_POSTERIOR_STREAMS;
+    if (accdrv_posterior_streams) {
+      *accdrv_posterior_streams = LIBXSMM_ACC_ACCDRV_POSTERIOR_STREAMS;
+    }
 # endif
 # if defined(LIBXSMM_ACC_ACCDRV_POSTERIOR_BUFFERS)
-    extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_posterior_buffers);
-    LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_posterior_buffers) = LIBXSMM_ACC_ACCDRV_POSTERIOR_BUFFERS;
+    if (accdrv_posterior_buffers) {
+      *accdrv_posterior_buffers = LIBXSMM_ACC_ACCDRV_POSTERIOR_BUFFERS;
+    }
 # endif
 # if defined(LIBXSMM_ACC_ACCDRV_PRIORITY_STREAMS)
-    extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_priority_streams);
-    LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_priority_streams) = LIBXSMM_ACC_ACCDRV_PRIORITY_STREAMS;
+    if (accdrv_priority_streams) {
+      *accdrv_priority_streams = LIBXSMM_ACC_ACCDRV_PRIORITY_STREAMS;
+    }
 # endif
 # if defined(LIBXSMM_ACC_ACCDRV_PRIORITY_BUFFERS)
-    extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_priority_buffers);
-    LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_priority_buffers) = LIBXSMM_ACC_ACCDRV_PRIORITY_BUFFERS;
+    if (accdrv_priority_buffers) {
+      *accdrv_priority_buffers = LIBXSMM_ACC_ACCDRV_PRIORITY_BUFFERS;
+    }
 # endif
 # if defined(LIBXSMM_ACC_ACCDRV_MIN_NFLOPS_PERMM)
-    extern int LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_min_flop_process);
-    LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_accdrv_min_flop_process) = LIBXSMM_ACC_ACCDRV_MIN_NFLOPS_PERMM;
-# endif
-#endif
-  }
-}
-
-
-# if defined(__GNUC__)
-LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
-# else
-LIBXSMM_ACC_EXTERN
-# endif
-void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_comm_thread_load)(const int*);
-LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_comm_thread_load)(const int* value)
-{
-  LIBXSMM_ACC_ASSERT(value);
-  int myvalue = *value;
-#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD)
-  if (libxsmm_acc_private::reconfigure) {
-    myvalue = LIBXSMM_ACC_COMM_THREAD_LOAD;
-  }
-#endif
-  LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_comm_thread_load)(&myvalue);
-}
-
-
-# if defined(__GNUC__)
-LIBXSMM_ACC_EXTERN LIBXSMM_ACC_ATTRIBUTE(weak)
-# else
-LIBXSMM_ACC_EXTERN
-# endif
-void LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(const int*);
-LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(__wrap_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(const int* value)
-{
-  LIBXSMM_ACC_ASSERT(value);
-  int myvalue = *value;
-#if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
-  if (!libxsmm_acc_private::explicit_configure || libxsmm_acc_private::reconfigure) {
-    const char *const env = getenv("CP2K_RMA");
-    const int disable = 0;
-    if (env && *env) {
-      LIBXSMM_ACC_FSYMBOL(dbcsr_config_mp_dbcsr_set_conf_use_mpi_filtering)(&disable);
-      myvalue = atoi(env);
+    if (accdrv_min_flop_process) {
+      *accdrv_min_flop_process = LIBXSMM_ACC_ACCDRV_MIN_NFLOPS_PERMM;
     }
-  }
+# endif
 #endif
-  LIBXSMM_ACC_FSYMBOL(__real_dbcsr_config_mp_dbcsr_set_conf_use_mpi_exp)(&myvalue);
+  }
 }
 
 
@@ -241,7 +201,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(xsmm_acc_process_mm_stack_s)(
   const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue,
   const float* a, const float* b, float* c, int* efficient/*Boolean*/)
 {
-  if (!libxsmm_acc_private::explicit_configure || libxsmm_acc_private::reconfigure) {
+  if (libxsmm_acc_private::reconfigure) {
     libxsmm_acc_private::process_mm_stack(
       descriptor, params, myvalue, a, b, c, efficient);
   }
@@ -259,7 +219,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(xsmm_acc_process_mm_stack_d)(
   const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue,
   const double* a, const double* b, double* c, int* efficient/*Boolean*/)
 {
-  if (!libxsmm_acc_private::explicit_configure || libxsmm_acc_private::reconfigure) {
+  if (libxsmm_acc_private::reconfigure) {
     libxsmm_acc_private::process_mm_stack(
       descriptor, params, myvalue, a, b, c, efficient);
   }
@@ -269,7 +229,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(xsmm_acc_process_mm_stack_d)(
   }
 }
 
-#endif // defined(__RECONFIGURE)
+#endif // defined(CP2K_CONFIG_PREFIX)
 
 #endif // defined(__LIBXSMM)
 #endif // defined(__LIBXSMM) || (defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM))
