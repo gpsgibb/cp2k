@@ -313,11 +313,15 @@ public:
       binsize = static_cast<size_t>(accdrv_binning_binsize);
       nbins = static_cast<size_t>(accdrv_binning_nbins);
     }
-    assert((static_cast<size_t>(-1) == binsize && static_cast<size_t>(-1) == nbins) ||
-           (static_cast<size_t>(-1) != binsize && static_cast<size_t>(-1) != nbins));
+    LIBXSMM_ACC_ASSERT((static_cast<size_t>(-1) == binsize && static_cast<size_t>(-1) == nbins) ||
+                       (static_cast<size_t>(-1) != binsize && static_cast<size_t>(-1) != nbins));
   }
   void operator()(libxsmm_acc_param_type* stack, size_t stacksize) const {
-    if (0 < binsize) run(stack, stacksize, binsize, nbins);
+    static const size_t invalid = static_cast<size_t>(-1);
+    if (invalid != binsize) {
+      LIBXSMM_ACC_ASSERT(invalid != nbins);
+      run(stack, stacksize, binsize, nbins);
+    }
   }
 
 private:
