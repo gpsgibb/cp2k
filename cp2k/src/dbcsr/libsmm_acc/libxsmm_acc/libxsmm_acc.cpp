@@ -37,14 +37,15 @@
 namespace libxsmm_acc_private {
   /** Internal type-agnostic call-forwarding to CP2K/intel stack processing; this is called by dbcsr_mm_hostdrv_mp_xsmm_process_mm_stack_[s|d]. */
   template<typename T>
-  void process_mm_stack(const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue, const T* a, const T* b, T* c, int* efficient/*Boolean*/)
+  void process_mm_stack(const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue,
+    const T* a, const T* b, T* c, LIBXSMM_ACC_FTYPE_LOGICAL* efficient)
   {
     int result = LIBXSMM_ACC_ERROR_CONDITION;
     if (0 != descriptor && 0 != params && 0 != myvalue && 0 != a && 0 != b && 0 != c) {
       result = libsmm_acc_process( // TODO: fix const-correctness in libsmm_acc.h
         params, *myvalue, LIBXSMM_ACC_NPARAMS, libxsmm_acc_elem<T,false>::type, const_cast<T*>(a), const_cast<T*>(b), c,
         descriptor->max_m, descriptor->max_n, descriptor->max_k, descriptor->defined_mnk, 0/*stream*/);
-      if (efficient) *efficient = 1;
+      if (efficient) *efficient = LIBXSMM_ACC_FTRUE;
     }
     switch (result) {
       case LIBXSMM_ACC_ERROR_CONDITION: LIBXSMM_ACC_ABORT("incorrect argument(s)"); break;
@@ -128,14 +129,14 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_
 # if (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
           dbcsr_cfg.comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
 # else
-          dbcsr_cfg.use_comm_thread = 0;
+          dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
 # endif
         }
 #endif
-        dbcsr_cfg.use_comm_thread = 1;
+        dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FTRUE;
       }
       else {
-        dbcsr_cfg.use_comm_thread = 0;
+        dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
       }
     }
 
@@ -157,8 +158,8 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_
     if (env_rma && *env_rma) {
       const int value = atoi(env_rma);
       if (0 != value) {
-        dbcsr_cfg.use_mpi_filtering = 0;
-        dbcsr_cfg.use_mpi_exp = 1;
+        dbcsr_cfg.use_mpi_filtering = LIBXSMM_ACC_FALSE;
+        dbcsr_cfg.use_mpi_exp = LIBXSMM_ACC_FTRUE;
       }
     }
 #endif
@@ -191,14 +192,13 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_
 
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(dbcsr_mm_hostdrv_mp_xsmm_process_mm_stack_s)(
   const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue,
-  const float* a, const float* b, float* c, int* efficient/*Boolean*/);
+  const float* a, const float* b, float* c, LIBXSMM_ACC_FTYPE_LOGICAL* efficient);
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(xsmm_acc_process_mm_stack_s)(
   const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue,
-  const float* a, const float* b, float* c, int* efficient/*Boolean*/)
+  const float* a, const float* b, float* c, LIBXSMM_ACC_FTYPE_LOGICAL* efficient)
 {
   if (libxsmm_acc_private::reconfigure) {
-    libxsmm_acc_private::process_mm_stack(
-      descriptor, params, myvalue, a, b, c, efficient);
+    libxsmm_acc_private::process_mm_stack(descriptor, params, myvalue, a, b, c, efficient);
   }
   else { /* CP2K/trunk/master code path */
     LIBXSMM_ACC_FSYMBOL(dbcsr_mm_hostdrv_mp_xsmm_process_mm_stack_s)(
@@ -209,14 +209,13 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(xsmm_acc_process_mm_stack_s)(
 
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(dbcsr_mm_hostdrv_mp_xsmm_process_mm_stack_d)(
   const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue,
-  const double* a, const double* b, double* c, int* efficient/*Boolean*/);
+  const double* a, const double* b, double* c, LIBXSMM_ACC_FTYPE_LOGICAL* efficient);
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(xsmm_acc_process_mm_stack_d)(
   const libxsmm_acc_stackdesc_type* descriptor, /*const*/ int* params, const int* myvalue,
-  const double* a, const double* b, double* c, int* efficient/*Boolean*/)
+  const double* a, const double* b, double* c, LIBXSMM_ACC_FTYPE_LOGICAL* efficient)
 {
   if (libxsmm_acc_private::reconfigure) {
-    libxsmm_acc_private::process_mm_stack(
-      descriptor, params, myvalue, a, b, c, efficient);
+    libxsmm_acc_private::process_mm_stack(descriptor, params, myvalue, a, b, c, efficient);
   }
   else { /* CP2K/trunk/master code path */
     LIBXSMM_ACC_FSYMBOL(dbcsr_mm_hostdrv_mp_xsmm_process_mm_stack_d)(

@@ -89,7 +89,8 @@
 
 #define LIBXSMM_ACC_ABORT(MESSAGE) xsmm_acc_abort(__FILE__, __LINE__, MESSAGE)
 #define LIBXSMM_ACC_FTYPE_LOGICAL int
-
+#define LIBXSMM_ACC_FTRUE -1
+#define LIBXSMM_ACC_FALSE 0
 
 /** Upper limits for the supported matrix sizes. */
 #define LIBXSMM_ACC_MAX_M 368
