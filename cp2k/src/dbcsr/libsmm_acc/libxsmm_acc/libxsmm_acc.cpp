@@ -75,36 +75,40 @@ LIBXSMM_ACC_EXTERN
 void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__real_, CP2K_CONFIG_PREFIX), dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_DECL);
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__wrap_, CP2K_CONFIG_PREFIX), dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_DECL)
 {
-  static bool initialized = false;
-  if (!initialized) {
+  // call original dbcsr_get_default_config, and receive default settings
+  LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__real_, CP2K_CONFIG_PREFIX), dbcsr_get_default_config))(
+    LIBXSMM_ACC_CONFIG_SIGNATURE_USE);
+
+  if (libxsmm_acc_private::reconfigure) {
+    static bool initialized = false;
+
+    if (!initialized) {
 #if defined(__TBBMALLOC)
-    const char *const env_hugepages = getenv("CP2K_HUGEPAGES");
-    if (0 == env_hugepages || 0 == *env_hugepages || 0 != atoi(env_hugepages)) {
-      scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
-    }
+      const char *const env_hugepages = getenv("CP2K_HUGEPAGES");
+      if (0 == env_hugepages || 0 == *env_hugepages || 0 != atoi(env_hugepages)) {
+        scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
+      }
 #endif
 #if defined(_OPENMP) && defined(KMP_VERSION_MAJOR)
-    // setting the stacksize applies independent of nested parallelism (LIBXSMM_ACC_OPENMP)
-    //kmp_set_stacksize(52428800);
+      // setting the stacksize applies independent of nested parallelism (LIBXSMM_ACC_OPENMP)
+      //kmp_set_stacksize(52428800);
 #endif
 #if defined(MKL_ENABLE_AVX512)
-    mkl_enable_instructions(MKL_ENABLE_AVX512);
+      mkl_enable_instructions(MKL_ENABLE_AVX512);
 #endif
 #if defined(__LIBXSMM)
-    libxsmm_init();
+      libxsmm_init();
 #endif
-    // better leave "CP2K_DRIVER" environment variable undocumented
-    // variable takes the internal literal/number representing MM driver
-    const char *const env_driver = getenv("CP2K_DRIVER");
-    if (env_driver && *env_driver) {
-      extern int LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg));
-      LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg)) = atoi(env_driver);
+      // better leave "CP2K_DRIVER" environment variable undocumented
+      // variable takes the internal literal/number representing MM driver
+      const char *const env_driver = getenv("CP2K_DRIVER");
+      if (env_driver && *env_driver) {
+        extern int LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg));
+        LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg)) = atoi(env_driver);
+      }
+      initialized = true;
     }
-    initialized = true;
-  }
 
-  LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__real_, CP2K_CONFIG_PREFIX), dbcsr_get_default_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_USE);
-  if (libxsmm_acc_private::reconfigure) {
     static const char *const env_stacksize = getenv("CP2K_STACKSIZE");
     if (mm_stack_size && env_stacksize && *env_stacksize) {
       const int value = atoi(env_stacksize);
@@ -117,6 +121,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_
       }
 #endif
     }
+
     static const char *const env_commtload = getenv("CP2K_COMMTLOAD");
     if (env_commtload && *env_commtload) {
       const int value = atoi(env_commtload);
@@ -141,6 +146,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_
 #endif
       }
     }
+
     static const char *const env_multrec = getenv("CP2K_MULTREC");
     if (multrec_limit && env_multrec && *env_multrec) {
       const int value = atoi(env_multrec);
@@ -153,6 +159,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_
       }
 #endif
     }
+
 #if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
     static const char *const env_rma = getenv("CP2K_RMA");
     if (env_rma && *env_rma) {
@@ -163,6 +170,7 @@ LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_
       }
     }
 #endif
+
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
 # if defined(LIBXSMM_ACC_ACCDRV_POSTERIOR_STREAMS)
     if (accdrv_posterior_streams) {
