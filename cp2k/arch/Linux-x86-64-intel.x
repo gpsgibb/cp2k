@@ -556,8 +556,7 @@ else # this is not the CP2K/intel branch
 endif
 ifneq (0,$(RECONFIGURE))
   DFLAGS  += -DCP2K_CONFIG_PREFIX=$(CONFIG_PREFIX)
-  LDFLAGS += -Wl,--wrap=$(CONFIG_PREFIX)dbcsr_get_default_config_
-  LDFLAGS += -Wl,--wrap=$(CONFIG_PREFIX)dbcsr_print_config_
+  LDFLAGS += -Wl,--wrap=$(CONFIG_PREFIX)dbcsr_set_config_
   DIAG_DISABLE := $(DIAG_DISABLE),11021
 endif
 
