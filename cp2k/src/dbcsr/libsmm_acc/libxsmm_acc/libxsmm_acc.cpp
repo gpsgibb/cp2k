@@ -189,7 +189,7 @@ void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__real_
 LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__wrap_, CP2K_CONFIG_PREFIX), dbcsr_set_config))(LIBXSMM_ACC_CONFIG_SIGNATURE_SETTER)
 {
   LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(LIBXSMM_ACC_CONCATENATE(__real_, CP2K_CONFIG_PREFIX), dbcsr_set_config))(
-    mm_driver, LIBXSMM_ACC_CONFIG_SIGNATURE_USE); // call original dbcsr_set_config
+    mm_driver, LIBXSMM_ACC_CONFIG_SIGNATURE_USE, mm_driver_strlen); // call original dbcsr_set_config
   libxsmm_acc_reconfigure(); // override settings
 }
 
