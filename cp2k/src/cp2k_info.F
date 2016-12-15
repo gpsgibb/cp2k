@@ -117,6 +117,8 @@ CONTAINS
       flags = TRIM(flags)//" elpa2"
 #elif defined(__ELPA3)
       flags = TRIM(flags)//" elpa3"
+#elif defined(__ELPA4)
+      flags = TRIM(flags)//" elpa4"
 #endif
 #if defined(__parallel)
       flags = TRIM(flags)//" parallel"

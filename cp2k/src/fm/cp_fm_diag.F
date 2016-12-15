@@ -53,11 +53,12 @@ USE cp_log_handling, ONLY: cp_logger_type, cp_get_default_logger, cp_logger_get_
                                              ieee_all
 #endif
 
-#if defined (__ELPA) || defined(__ELPA2) || defined(__ELPA3)
-!#if defined (__ELPA) || defined(__ELPA2)
-  USE ELPA2, ONLY: solve_evp_real_2stage          ! ELPA[1-2] and deprecated ELPA3 interface
-!#elif defined (__ELPA3)
-!  USE ELPA2, ONLY: elpa_solve_evp_real_2stage    ! new ELPA3 interface
+#if defined(__ELPA) || defined(__ELPA2)
+  USE ELPA2, ONLY: solve_evp_real_2stage              ! ELPA[1-2] and deprecated ELPA3 interface
+#elif defined(__ELPA3)
+  USE ELPA2, ONLY: elpa_solve_evp_real_2stage         ! new ELPA3 interface
+#elif defined(__ELPA4)
+  USE ELPA2, ONLY: elpa_solve_evp_real_2stage_double  ! ELPA4 interface
 #endif
 
 #include "../base/base_uses.f90"
@@ -114,7 +115,7 @@ CONTAINS
       IF (try_library) THEN
          IF (diag_lib .EQ. "ELPA") THEN
 
-#if defined (__ELPA) || defined (__ELPA2) || defined (__ELPA3)
+#if defined (__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4)
             diag_type = 3
 #else
             ! ELPA library not linked, switch to SL
@@ -921,7 +922,7 @@ CONTAINS
                                      routineP = moduleN//':'//routineN
 
       INTEGER                                  :: handle
-#if defined(__SCALAPACK) && (defined(__ELPA) || defined (__ELPA2) || defined(__ELPA3))
+#if defined(__SCALAPACK) && (defined(__ELPA) || defined (__ELPA2) || defined(__ELPA3) || defined(__ELPA4))
       INTEGER                                  :: comm_col, comm_row, group, &
                                                   mypcol, myprow, n, &
                                                   n_rows, n_cols, &
@@ -933,7 +934,7 @@ CONTAINS
 #endif
 
       CALL timeset(routineN, handle)
-#if defined(__SCALAPACK) && (defined(__ELPA) || defined (__ELPA2) || defined (__ELPA3))
+#if defined(__SCALAPACK) && (defined(__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4))
 
       success = .TRUE.
 
@@ -973,16 +974,36 @@ CONTAINS
 #if defined (__ELPA)
       CALL solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, comm_row, comm_col, group)
 #elif defined (__ELPA2)
-      success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, comm_row, comm_col, group, &
-                                      THIS_REAL_ELPA_KERNEL_API=kernel_type, useQR=.FALSE.)
-#else
-! deprecated ELPA3 interface
-      success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, comm_row, comm_col, group, &
-                                      THIS_REAL_ELPA_KERNEL_API=kernel_type, useQR=.FALSE.)
-! new ELPA3 interface
-!      success = elpa_solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
-!                                           comm_row, comm_col, group, &
-!                                           THIS_REAL_ELPA_KERNEL_API=kernel_type, useQR=.FALSE.)
+      IF (kernel_type == 0) THEN ! let ELPA choose the kernel
+         success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, comm_row, comm_col, group, &
+                                         useQR=.FALSE.)
+      ELSE
+         success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, comm_row, comm_col, group, &
+                                         THIS_REAL_ELPA_KERNEL_API=kernel_type, &
+                                         useQR=.FALSE.)
+      END IF
+#elif defined(__ELPA3)
+      IF (kernel_type == 0) THEN ! let ELPA choose the kernel
+         success = elpa_solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
+                                              comm_row, comm_col, group, &
+                                              useQR=.FALSE.)
+      ELSE
+         success = elpa_solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
+                                              comm_row, comm_col, group, &
+                                              THIS_REAL_ELPA_KERNEL_API=kernel_type, &
+                                              useQR=.FALSE.)
+      END IF
+#elif defined(__ELPA4)
+      IF (kernel_type == 0) THEN ! let ELPA choose the kernel
+         success = elpa_solve_evp_real_2stage_double(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
+                                                     comm_row, comm_col, group, &
+                                                     useQR=.FALSE.)
+      ELSE
+         success = elpa_solve_evp_real_2stage_double(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
+                                                     comm_row, comm_col, group, &
+                                                     THIS_REAL_ELPA_KERNEL_API=kernel_type, &
+                                                     useQR=.FALSE.)
+      END IF
 #endif
 
       IF (.NOT. success) &

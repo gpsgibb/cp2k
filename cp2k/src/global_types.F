@@ -103,7 +103,7 @@ CONTAINS
       globenv%ref_count = 1
       globenv%run_type_id = 0
       globenv%diag_library = "SL"
-      globenv%k_elpa = 1
+      globenv%k_elpa = 0 ! select automatically
       globenv%default_fft_library = "FFTSG"
       globenv%fftw_wisdom_file_name = "/etc/fftw/wisdom"
       globenv%prog_name_id = 0
