@@ -123,11 +123,15 @@ CONTAINS
          enum_c_vals=s2a("GENERIC", "GENERIC_SIMPLE", "BGP", "BGQ", "SSE", "SSE_BLOCK2", "SSE_BLOCK4", "SSE_BLOCK6", &
                          "AVX_BLOCK2", "AVX_BLOCK4", "AVX_BLOCK6", "AVX2_BLOCK2", "AVX2_BLOCK4", "AVX2_BLOCK6", &
                          "AVX512_BLOCK2", "AVX512_BLOCK4", "AVX512_BLOCK6", "GPU"), &
-         enum_desc=s2a( &
-         "Generic kernel", "Simplified generic kernel", "Kernel optimized for IBM BGP", "Kernel optimized for IBM BGQ", &
-         "Kernel wiwth assembler for SSE vectorization", "Kernel optimized for x86_64 using SSE2/SSE3 (Intel)", &
-         "Kernel optimized for x86_64 using SSE2/SSE4 (AMD Bulldozer) ", &
-         "Kernel optimized for x86_64 using SSE2/SSE4 (block6)"))
+         enum_desc=s2a("Generic kernel", "Simplified generic kernel", &
+                       "Kernel optimized for IBM BGP", "Kernel optimized for IBM BGQ", "Kernel optimized for x86_64/SSE", &
+                       "Kernel optimized for x86_64/SSE (block=2)", "Kernel optimized for x86_64/SSE (block=4)", &
+                       "Kernel optimized for x86_64/SSE (block=6)", "Kernel optimized for Intel AVX (block=2)", &
+                       "Kernel optimized for Intel AVX (block=4)", "Kernel optimized for Intel AVX (block=6)", &
+                       "Kernel optimized for Intel AVX2 (block=2)", "Kernel optimized for Intel AVX2 (block=4)", &
+                       "Kernel optimized for Intel AVX2 (block=6)", "Kernel optimized for Intel AVX-512 (block=2)", &
+                       "Kernel optimized for Intel AVX-512 (block=4)", "Kernel optimized for Intel AVX-512 (block=6)", &
+                       "Kernel targeting GPUs"))
       CALL section_add_keyword(section, keyword)
       CALL keyword_release(keyword)
 
