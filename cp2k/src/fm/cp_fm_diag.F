@@ -106,10 +106,19 @@ CONTAINS
 
       ! always try something "beyond" ScaLAPACK, because otherwise ScaLAPACK is always used
       ! despite of an eventual compile-time configuration a.k.a __SCALAPACK2 or __ELPAx
-      try_library = .TRUE.
+      IF (diag_lib .EQ. "SE") THEN
+         try_library = .FALSE.
+      ELSE
+         try_library = .TRUE.
+      ENDIF
 
-      ! ScaLAPACK is the default and always linked
+#if defined (__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4)
+      diag_type = 3
+#elif defined (__SCALAPACK2)
+      diag_type = 2
+#else ! ScaLAPACK is the default and always linked
       diag_type = 1
+#endif
 
       IF (try_library) THEN
          IF (diag_lib .EQ. "ELPA") THEN
