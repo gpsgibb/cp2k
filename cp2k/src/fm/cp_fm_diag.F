@@ -97,44 +97,39 @@ CONTAINS
 ! **************************************************************************************************
    SUBROUTINE diag_init(diag_lib, switched, k_elpa)
       CHARACTER(LEN=*), INTENT(IN)                       :: diag_lib
-      LOGICAL, INTENT(INOUT)                             :: switched
-      INTEGER, INTENT(IN)                                :: k_elpa
+      LOGICAL, INTENT(OUT)                               :: switched
+      INTEGER, INTENT(IN), OPTIONAL                      :: k_elpa
 
       CHARACTER(len=*), PARAMETER :: routineN = 'diag_init', routineP = moduleN//':'//routineN
 
       LOGICAL                                            :: try_library
 
-      ! scalapack is the default and always linked
-      IF (diag_lib .EQ. "SL") THEN
-         try_library = .FALSE.
-         diag_type = 1
-      ELSE
-         try_library = .TRUE.
-      END IF
+      ! always try something "beyond" ScaLAPACK, because otherwise ScaLAPACK is always used
+      ! despite of an eventual compile-time configuration a.k.a __SCALAPACK2 or __ELPAx
+      try_library = .TRUE.
+
+      ! ScaLAPACK is the default and always linked
+      diag_type = 1
 
       IF (try_library) THEN
          IF (diag_lib .EQ. "ELPA") THEN
-
 #if defined (__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4)
             diag_type = 3
 #else
-            ! ELPA library not linked, switch to SL
-            diag_type = 1
+            ! ELPA library not linked, take a note and stick with SL
             switched = .TRUE.
 #endif
          ELSE IF (diag_lib .EQ. "SL2") THEN
-
 #if defined (__SCALAPACK2)
             diag_type = 2
 #else
-            ! SL2 library not linked, switch to SL
-            diag_type = 1
+            ! SL2 library not linked, take a note and stick with SL
             switched = .TRUE.
 #endif
          END IF
       END IF
 
-      IF (diag_type == 3) THEN
+      IF (diag_type == 3 .AND. PRESENT(k_elpa)) THEN
          kernel_type = k_elpa
       END IF
 
