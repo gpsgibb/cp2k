@@ -116,14 +116,15 @@ CONTAINS
          keyword, name="ELPA_KERNEL", &
          description="Specifies the kernel to be used when ELPA is in use", &
          usage="ELPA_KERNEL SSE", &
-         default_i_val=elpa_gen, &
-         enum_i_vals=(/elpa_gen, elpa_gen_sim, elpa_bgp, elpa_bgq, elpa_sse, elpa_sse_b2, elpa_sse_b4, elpa_sse_b6, &
+         default_i_val=elpa_auto, &
+         enum_i_vals=(/elpa_auto, &
+                       elpa_gen, elpa_gen_sim, elpa_bgp, elpa_bgq, elpa_sse, elpa_sse_b2, elpa_sse_b4, elpa_sse_b6, &
                        elpa_avx_b2, elpa_avx_b4, elpa_avx_b6, elpa_avx2_b2, elpa_avx2_b4, elpa_avx2_b6, &
                        elpa_avx512_b2, elpa_avx512_b4, elpa_avx512_b6, elpa_gpu/), &
-         enum_c_vals=s2a("GENERIC", "GENERIC_SIMPLE", "BGP", "BGQ", "SSE", "SSE_BLOCK2", "SSE_BLOCK4", "SSE_BLOCK6", &
-                         "AVX_BLOCK2", "AVX_BLOCK4", "AVX_BLOCK6", "AVX2_BLOCK2", "AVX2_BLOCK4", "AVX2_BLOCK6", &
-                         "AVX512_BLOCK2", "AVX512_BLOCK4", "AVX512_BLOCK6", "GPU"), &
-         enum_desc=s2a("Generic kernel", "Simplified generic kernel", &
+         enum_c_vals=s2a("AUTO", "GENERIC", "GENERIC_SIMPLE", "BGP", "BGQ", "SSE", &
+                         "SSE_BLOCK2", "SSE_BLOCK4", "SSE_BLOCK6", "AVX_BLOCK2", "AVX_BLOCK4", "AVX_BLOCK6", "AVX2_BLOCK2", &
+                         "AVX2_BLOCK4", "AVX2_BLOCK6", "AVX512_BLOCK2", "AVX512_BLOCK4", "AVX512_BLOCK6", "GPU"), &
+         enum_desc=s2a("Automatically selected kernel", "Generic kernel", "Simplified generic kernel", &
                        "Kernel optimized for IBM BGP", "Kernel optimized for IBM BGQ", "Kernel optimized for x86_64/SSE", &
                        "Kernel optimized for x86_64/SSE (block=2)", "Kernel optimized for x86_64/SSE (block=4)", &
                        "Kernel optimized for x86_64/SSE (block=6)", "Kernel optimized for Intel AVX (block=2)", &

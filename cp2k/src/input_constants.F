@@ -758,7 +758,8 @@ MODULE input_constants
                                                do_diag_sl2 = 2, &
                                                do_diag_elpa = 3
    ! ELPA kernel
-   INTEGER, PARAMETER, PUBLIC               :: elpa_gen = 1, &
+   INTEGER, PARAMETER, PUBLIC               :: elpa_auto = 0, &
+                                               elpa_gen = 1, &
                                                elpa_gen_sim = 2, &
                                                elpa_bgp = 3, &
                                                elpa_bgq = 4, &

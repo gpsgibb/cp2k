@@ -102,16 +102,7 @@ CONTAINS
 
       CHARACTER(len=*), PARAMETER :: routineN = 'diag_init', routineP = moduleN//':'//routineN
 
-      LOGICAL                                            :: try_library
-
-      ! always try something "beyond" ScaLAPACK, because otherwise ScaLAPACK is always used
-      ! despite of an eventual compile-time configuration a.k.a __SCALAPACK2 or __ELPAx
-      IF (diag_lib .EQ. "SL") THEN
-         try_library = .FALSE.
-      ELSE
-         try_library = .TRUE.
-      ENDIF
-
+      ! consider compile-time request for a specific diagonalization method/routine
 #if defined (__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4)
       diag_type = 3
 #elif defined (__SCALAPACK2)
@@ -120,22 +111,13 @@ CONTAINS
       diag_type = 1
 #endif
 
-      IF (try_library) THEN
-         IF (diag_lib .EQ. "ELPA") THEN
-#if defined (__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4)
-            diag_type = 3
-#else
-            ! ELPA library not linked, take a note and stick with SL
-            switched = .TRUE.
-#endif
-         ELSE IF (diag_lib .EQ. "SL2") THEN
-#if defined (__SCALAPACK2)
-            diag_type = 2
-#else
-            ! SL2 library not linked, take a note and stick with SL
-            switched = .TRUE.
-#endif
-         END IF
+      IF (diag_lib .EQ. "ELPA") THEN
+         switched = (diag_type.NE.3)
+      ELSE IF (diag_lib .EQ. "SL2") THEN
+         switched = (diag_type.NE.2)
+      ELSE
+         CPASSERT(diag_lib .EQ. "SL")
+         switched = (diag_type.NE.1)
       END IF
 
       IF (diag_type == 3 .AND. PRESENT(k_elpa)) THEN
