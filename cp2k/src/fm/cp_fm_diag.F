@@ -106,7 +106,7 @@ CONTAINS
 
       ! always try something "beyond" ScaLAPACK, because otherwise ScaLAPACK is always used
       ! despite of an eventual compile-time configuration a.k.a __SCALAPACK2 or __ELPAx
-      IF (diag_lib .EQ. "SE") THEN
+      IF (diag_lib .EQ. "SL") THEN
          try_library = .FALSE.
       ELSE
          try_library = .TRUE.
