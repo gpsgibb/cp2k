@@ -218,7 +218,7 @@ CONTAINS
       CASE (mm_driver_xsmm)
          SELECT CASE (this%data_area%d%data_type)
          CASE (dbcsr_type_real_4)
-#if !defined(__RECONFIGURE)
+#if !defined(CP2K_CONFIG_PREFIX)
             CALL xsmm_process_mm_stack_s(stack_descr, params, stack_size, &
                                          left%data_area%d%r_sp, right%data_area%d%r_sp, this%data_area%d%r_sp, used_smm)
 #else
@@ -226,7 +226,7 @@ CONTAINS
                                          left%data_area%d%r_sp, right%data_area%d%r_sp, this%data_area%d%r_sp, used_smm)
 #endif
          CASE (dbcsr_type_real_8)
-#if !defined(__RECONFIGURE)
+#if !defined(CP2K_CONFIG_PREFIX)
             CALL xsmm_process_mm_stack_d(stack_descr, params, stack_size, &
                                          left%data_area%d%r_dp, right%data_area%d%r_dp, this%data_area%d%r_dp, used_smm)
 #else
