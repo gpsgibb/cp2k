@@ -134,6 +134,16 @@ void libxsmm_acc_reconfigure()
       dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
     }
   }
+#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD)
+  else {
+# if (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
+    dbcsr_cfg.comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
+    dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FTRUE;
+# else
+    dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
+# endif
+  }
+#endif
 
   const char *const env_multrec = getenv("CP2K_MULTREC");
   if (env_multrec && *env_multrec) {
@@ -147,6 +157,11 @@ void libxsmm_acc_reconfigure()
     }
 #endif
   }
+#if defined(LIBXSMM_ACC_MULTREC_LIMIT) && (0 < LIBXSMM_ACC_MULTREC_LIMIT)
+  else {
+    dbcsr_cfg.multrec_limit = LIBXSMM_ACC_MULTREC_LIMIT;
+  }
+#endif
 
 #if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
   const char *const env_rma = getenv("CP2K_RMA");
