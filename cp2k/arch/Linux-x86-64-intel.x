@@ -93,8 +93,13 @@ else
   MKL ?= 2
 endif
 
-# consider more accurate -fp-model (C/C++: precise, Fortran: source)
-FPFLAGS ?= -fp-model fast=2
+# consider more accurate FP-model
+FPCMODEL = precise
+FPCMODEL = fast=2
+FPFMODEL = source
+FPFMODEL = fast=2
+
+# FP compiler flags
 FPFLAGS += -complex-limited-range
 #FPFLAGS += -fast-transcendentals
 #FPFLAGS += -fimf-domain-exclusion=1
@@ -156,9 +161,9 @@ OPTFLAGS  = $(TARGET)
 ifeq (0,$(DBG))
   OPTFLAGS  += -O$(OPT)
   DFLAGS    += -DNDEBUG
-  CXXFLAGS  += -fno-alias -ansi-alias $(FPFLAGS)
-  CFLAGS    += -fno-alias -ansi-alias $(FPFLAGS)
-  FCFLAGS   += -align array64byte     $(FPFLAGS)
+  CXXFLAGS  += -fno-alias -ansi-alias -fp-model $(FPCMODEL) $(FPFLAGS)
+  CFLAGS    += -fno-alias -ansi-alias -fp-model $(FPCMODEL) $(FPFLAGS)
+  FCFLAGS   += -align array64byte     -fp-model $(FPFMODEL) $(FPFLAGS)
   #LDFLAGS   += $(NULL)
 else
   OPTFLAGS += -O0
