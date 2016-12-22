@@ -138,7 +138,7 @@ void libxsmm_acc_reconfigure()
       dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
     }
   }
-#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD && 0/*disabled*/
+#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD) && 0/*disabled*/
   else {
 # if (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
     dbcsr_cfg.comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
