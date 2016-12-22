@@ -91,6 +91,10 @@ void libxsmm_acc_reconfigure()
 # if LIBXSMM_VERSION4(1, 6, 1, 83) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
   libxsmm_set_gemm_auto_prefetch(LIBXSMM_PREFETCH_BL2_VIA_C);
 # endif
+# if LIBXSMM_VERSION4(1, 6, 2, 4) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+  libxsmm_set_dispatch_trylock(1);
+# endif
+
 #endif
   // better leave "CP2K_DRIVER" environment variable undocumented
   // variable takes the internal literal/number representing MM driver
