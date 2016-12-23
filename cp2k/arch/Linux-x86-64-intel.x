@@ -331,19 +331,20 @@ ifneq (,$(LIBXSMMROOT))
   LIBXSMM ?= 1
   ifneq (0,$(LIBXSMM))
     LIBXSMM_LIB = $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmm.a
-
-    # substitute "big" xGEMM calls with LIBXSMM
+    # enable additional use cases for LIBXSMM
     ifeq (1,$(shell echo $$((1 < $(LIBXSMM)))))
+      DFLAGS += -D__LIBXSMM_TRANS
+      # substitute "big" xGEMM calls with LIBXSMM
       ifeq (1,$(shell echo $$((2 < $(LIBXSMM)))))
-        DFLAGS += -D__LIBXSMM_TRANS
+        LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
+        WRAP ?= 1
+        ifeq (2,$(WRAP))
+          LDFLAGS += -Wl,--wrap=dgemm_
+        else
+          LDFLAGS += -Wl,--wrap=sgemm_,--wrap=dgemm_
+        endif
       endif
-      LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
-      WRAP ?= 1
-      ifeq (2,$(WRAP))
-        LDFLAGS += -Wl,--wrap=dgemm_
-      else
-        LDFLAGS += -Wl,--wrap=sgemm_,--wrap=dgemm_
-      endif
+      # account for OpenMP-enabled wrapper routines
       ifeq (0,$(OMP))
         ifeq (1,$(MKL))
           LIBS += -liomp5
@@ -354,7 +355,6 @@ ifneq (,$(LIBXSMMROOT))
     else
       WRAP ?= 0
     endif
-
     ifeq (1,$(shell echo "$$((0>=$(JIT)))"))
       LIBXSMM_MNK := "23, 6, 14 16 29, 14 32 29, 5 32 13 24 26, 9 32 22, 64, 78, 16 29 55, 32 29 55, 12, 4 5 7 9 13 25 26 28 32 45"
     endif
@@ -364,7 +364,6 @@ ifneq (,$(LIBXSMMROOT))
         LIBXSMM_MPSS := 1
       endif
     endif
-
 $(LIBXSMM_LIB): .state
 	$(info ================================================================================)
 	$(info Automatically enabled LIBXSMM $(shell $(LIBXSMMROOT)/scripts/libxsmm_utilities.py 2> /dev/null))
@@ -385,7 +384,6 @@ $(SRCDIR)/base/base_uses.f90: $(LIBXSMM_LIB)
 ifneq (,$(wildcard $(LIBXSMM_LIB)))
 	@touch $(OBJDIR)/*.o
 endif
-
     DFLAGS += -D__LIBXSMM=$(LIBXSMM)
     IFLAGS += -I$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/include
     LIBS += $(LIBXSMM_LIB) $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmf.a
