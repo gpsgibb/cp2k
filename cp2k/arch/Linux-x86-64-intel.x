@@ -343,6 +343,8 @@ ifneq (,$(LIBXSMMROOT))
         else
           LDFLAGS += -Wl,--wrap=sgemm_,--wrap=dgemm_
         endif
+      else
+        WRAP ?= 0
       endif
       # account for OpenMP-enabled wrapper routines
       ifeq (0,$(OMP))
