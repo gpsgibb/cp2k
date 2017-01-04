@@ -12,7 +12,7 @@ def main():
     usage = "Write a new kernel parameter file as an unique merge of an old parameter file and a new one called parameters.txt as created by collect.py"
     parser = OptionParser(usage)
     parser.add_option("-p", "--params", metavar="filename.txt",
-          default="parameters_K20X.txt",
+          default="parameters_P100.txt",
           help="Default: %default")
 
     (options, args) = parser.parse_args()
@@ -38,7 +38,7 @@ def main():
     f = open("parameters.new","w")
     f.write("# *****************************************************************************\n")
     f.write("# * CP2K: A general program to perform molecular dynamics simulations         *\n")
-    f.write("# * Copyright (C) 2000 - 2016 the CP2K developers group                       *\n")
+    f.write("# * Copyright (C) 2000 - 2017  CP2K developers group                          *\n")
     f.write("# *****************************************************************************\n")
     f.write("\n[\n")
 
