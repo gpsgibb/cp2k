@@ -1377,16 +1377,14 @@ CONTAINS
             CALL mp_waitall(right_data_rr)
             CALL mp_waitall(right_index_sr)
             CALL mp_waitall(right_index_rr)
-         ENDIF wait_right
-         CALL timestop(handle2)
-         !
-         ! Repoint indices of right matrices
-         calc_case_right: IF (metronome .GT. 1) THEN
+            !
+            ! Repoint indices of right matrices
             DO v_ki = 0, right_row_nimages-1
                CALL dbcsr_repoint_index(right_buffer_calc%mats(v_ki+1, 1))
                right_buffer_calc%mats(v_ki+1, 1)%valid = .TRUE.
             ENDDO
-         ENDIF calc_case_right
+         ENDIF wait_right
+         CALL timestop(handle2)
          !
          ! Right matrix transfer. Transfer in all but the last loop
          ! iteration.
@@ -1504,16 +1502,14 @@ CONTAINS
             CALL mp_waitall(left_data_rr)
             CALL mp_waitall(left_index_sr)
             CALL mp_waitall(left_index_rr)
-         ENDIF wait_left
-         CALL timestop(handle2)
-         !
-         ! Repoint indices of left matrices and do the multiplications.
-         calc_case_left: IF (metronome .GT. 1) THEN
+            !
+            ! Repoint indices of left matrices
             DO v_ki = 0, left_col_nimages-1
                CALL dbcsr_repoint_index(left_buffer_calc%mats(1, v_ki+1))
                left_buffer_calc%mats(1, v_ki+1)%valid = .TRUE.
             ENDDO
-         ENDIF calc_case_left
+         ENDIF wait_left
+         CALL timestop(handle2)
          !
          ! Left matrix transfer. Transfer in all but the last loop
          ! iteration.
@@ -1620,7 +1616,7 @@ CONTAINS
                CALL timestop(handle2)
             ENDDO
          ENDIF xfer_left
-
+         ! Do multiplication
          CALL timeset(routineN//"_multrec", handle2)
          DO v_ki = 0, min_nimages-1
             IF (debug_mod) THEN
