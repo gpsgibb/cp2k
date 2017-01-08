@@ -10,9 +10,9 @@
 !>      01.2017 ported to Fypp [Ole Schuett]
 !> \author Fawzi Mohamed
 ! **************************************************************************************************
-MODULE particle_list_types
-   USE particle_types,                  ONLY: deallocate_particle_set,&
-                                              particle_type
+MODULE molecule_list_types
+   USE molecule_types,                  ONLY: deallocate_molecule_set,&
+                                              molecule_type
 
 #include "../base/base_uses.f90"
 
@@ -21,6 +21,6 @@ MODULE particle_list_types
 
 #:include "subsys_list.fypp"
 
-$:subsys_list_macro(name='particle')
+$:subsys_list_macro(name='molecule')
 
-END MODULE particle_list_types
+END MODULE molecule_list_types
