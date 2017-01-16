@@ -19,6 +19,9 @@ MODULE input_cp2k_global
                                               BLACS_GRID_ROW,&
                                               BLACS_GRID_SQUARE
    USE cp_dbcsr_cp2k_link,              ONLY: create_dbcsr_section
+   USE cp_fm_elpa,                      ONLY: get_elpa_kernel_descriptions,&
+                                              get_elpa_kernel_names,&
+                                              get_elpa_number_kernels
    USE cp_output_handling,              ONLY: add_last_numeric,&
                                               cp_print_key_section_create,&
                                               debug_print_level,&
@@ -31,12 +34,9 @@ MODULE input_cp2k_global
         do_atom, do_band, do_cp2k, do_dbcsr, do_diag_elpa, do_diag_sl, do_diag_sl2, do_farming, &
         do_fft_fftw3, do_fft_sg, do_opt_basis, do_optimize_input, do_pdgemm, do_swarm, do_tamc, &
         do_test, do_tree_mc, do_tree_mc_ana, driver_run, ehrenfest, electronic_spectra_run, &
-        elpa_auto, elpa_gen, elpa_gen_sim, elpa_bgp, elpa_bgq, elpa_sse, elpa_sse_b2, &
-        elpa_sse_b4, elpa_sse_b6, elpa_avx_b2, elpa_avx_b4, elpa_avx_b6, elpa_avx2_b2, &
-        elpa_avx2_b4, elpa_avx2_b6, elpa_avx512_b2, elpa_avx512_b4, elpa_avx512_b6, &
-        elpa_gpu, energy_force_run, energy_run, fftw_plan_estimate, fftw_plan_exhaustive, &
-        fftw_plan_measure, fftw_plan_patient, gaussian, geo_opt_run, linear_response_run, &
-        mol_dyn_run, mon_car_run, none_run, pint_run, real_time_propagation, tree_mc_run, vib_anal
+        energy_force_run, energy_run, fftw_plan_estimate, fftw_plan_exhaustive, fftw_plan_measure, &
+        fftw_plan_patient, gaussian, geo_opt_run, linear_response_run, mol_dyn_run, mon_car_run, &
+        none_run, pint_run, real_time_propagation, tree_mc_run, vib_anal
    USE input_keyword_types,             ONLY: keyword_create,&
                                               keyword_release,&
                                               keyword_type
@@ -72,6 +72,7 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'create_global_section', &
          routineP = moduleN//':'//routineN
 
+      INTEGER                                            :: i
       TYPE(keyword_type), POINTER                        :: keyword
       TYPE(section_type), POINTER                        :: print_key, sub_section
 
@@ -115,24 +116,10 @@ CONTAINS
       CALL keyword_create( &
          keyword, name="ELPA_KERNEL", &
          description="Specifies the kernel to be used when ELPA is in use", &
-         usage="ELPA_KERNEL SSE", &
-         default_i_val=elpa_auto, &
-         enum_i_vals=(/elpa_auto, &
-                       elpa_gen, elpa_gen_sim, elpa_bgp, elpa_bgq, elpa_sse, elpa_sse_b2, elpa_sse_b4, elpa_sse_b6, &
-                       elpa_avx_b2, elpa_avx_b4, elpa_avx_b6, elpa_avx2_b2, elpa_avx2_b4, elpa_avx2_b6, &
-                       elpa_avx512_b2, elpa_avx512_b4, elpa_avx512_b6, elpa_gpu/), &
-         enum_c_vals=s2a("AUTO", "GENERIC", "GENERIC_SIMPLE", "BGP", "BGQ", "SSE", &
-                         "SSE_BLOCK2", "SSE_BLOCK4", "SSE_BLOCK6", "AVX_BLOCK2", "AVX_BLOCK4", "AVX_BLOCK6", "AVX2_BLOCK2", &
-                         "AVX2_BLOCK4", "AVX2_BLOCK6", "AVX512_BLOCK2", "AVX512_BLOCK4", "AVX512_BLOCK6", "GPU"), &
-         enum_desc=s2a("Automatically selected kernel", "Generic kernel", "Simplified generic kernel", &
-                       "Kernel optimized for IBM BGP", "Kernel optimized for IBM BGQ", "Kernel optimized for x86_64/SSE", &
-                       "Kernel optimized for x86_64/SSE (block=2)", "Kernel optimized for x86_64/SSE (block=4)", &
-                       "Kernel optimized for x86_64/SSE (block=6)", "Kernel optimized for Intel AVX (block=2)", &
-                       "Kernel optimized for Intel AVX (block=4)", "Kernel optimized for Intel AVX (block=6)", &
-                       "Kernel optimized for Intel AVX2 (block=2)", "Kernel optimized for Intel AVX2 (block=4)", &
-                       "Kernel optimized for Intel AVX2 (block=6)", "Kernel optimized for Intel AVX-512 (block=2)", &
-                       "Kernel optimized for Intel AVX-512 (block=4)", "Kernel optimized for Intel AVX-512 (block=6)", &
-                       "Kernel targeting GPUs"))
+         default_i_val=1, &
+         enum_i_vals=(/(i, i=1, get_elpa_number_kernels())/), &
+         enum_c_vals=get_elpa_kernel_names(), &
+         enum_desc=get_elpa_kernel_descriptions())
       CALL section_add_keyword(section, keyword)
       CALL keyword_release(keyword)
 

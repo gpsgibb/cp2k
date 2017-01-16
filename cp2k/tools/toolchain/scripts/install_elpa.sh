@@ -48,8 +48,8 @@ case "$with_elpa" in
             tar -xzf elpa-${elpa_ver}.tar.gz
 
             # fix wrong dependency order (at least in elpa 2016.05.003)
-            sed -i "s/build_lib = libelpa@SUFFIX@.la libelpatest@SUFFIX@.la/build_lib = libelpatest@SUFFIX@.la libelpa@SUFFIX@.la/g" elpa-${elpa_ver}/Makefile.in
-            sed -i "s/build_lib = libelpa@SUFFIX@.la libelpatest@SUFFIX@.la/build_lib = libelpatest@SUFFIX@.la libelpa@SUFFIX@.la/g" elpa-${elpa_ver}/Makefile.am
+            # sed -i "s/build_lib = libelpa@SUFFIX@.la libelpatest@SUFFIX@.la/build_lib = libelpatest@SUFFIX@.la libelpa@SUFFIX@.la/g" elpa-${elpa_ver}/Makefile.in
+            # sed -i "s/build_lib = libelpa@SUFFIX@.la libelpatest@SUFFIX@.la/build_lib = libelpatest@SUFFIX@.la libelpa@SUFFIX@.la/g" elpa-${elpa_ver}/Makefile.am
 
             # need both flavors ?
 
@@ -58,57 +58,60 @@ case "$with_elpa" in
             cd elpa-${elpa_ver}
             # shared libraries cannot be built if linked with
             # reflapack (the case when valgrind is enabled)
-            if [ $ENABLE_VALGRIND = "__TRUE__" ] ; then
+            if [ "$ENABLE_VALGRIND" = "__TRUE__" ] ; then
                 shared_flag=no
             else
                 shared_flag=yes
             fi
             # specific settings needed on CRAY Linux Environment
-            if [ $ENABLE_CRAY = "__TRUE__" ] ; then
+            if [ "$ENABLE_CRAY" = "__TRUE__" ] ; then
                 # extra LDFLAGS needed
                 cray_ldflags="-dynamic"
             fi
             # non-threaded version
-            ./configure  --prefix=${pkg_install_dir} \
-                         --libdir="${pkg_install_dir}/lib" \
-                         --enable-openmp=no \
-                         --enable-shared=$shared_flag \
-                         --enable-static=yes \
-                         FC=${MPIFC} \
-                         CC=${MPICC} \
-                         CXX=${MPICXX} \
-                         FCFLAGS="${FCFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS} -ffree-line-length-none" \
-                         CFLAGS="${CFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
-                         CXXFLAGS="${CXXFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
-                         LDFLAGS="-Wl,--enable-new-dtags ${MATH_LDFLAGS} ${SCALAPACK_LDFLAGS} ${cray_ldflags}" \
-                         LIBS="${SCALAPACK_LIBS} ${MATH_LIBS}" \
-                         > configure.log 2>&1
+            mkdir -p obj_no_thread; cd obj_no_thread
+            ../configure  --prefix=${pkg_install_dir} \
+                          --libdir="${pkg_install_dir}/lib" \
+                          --enable-openmp=no \
+                          --enable-shared=$shared_flag \
+                          --enable-static=yes \
+                          FC=${MPIFC} \
+                          CC=${MPICC} \
+                          CXX=${MPICXX} \
+                          FCFLAGS="${FCFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS} -ffree-line-length-none" \
+                          CFLAGS="${CFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
+                          CXXFLAGS="${CXXFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
+                          LDFLAGS="-Wl,--enable-new-dtags ${MATH_LDFLAGS} ${SCALAPACK_LDFLAGS} ${cray_ldflags}" \
+                          LIBS="${SCALAPACK_LIBS} ${MATH_LIBS}" \
+                          > configure.log 2>&1
             make -j $NPROCS >  make.log 2>&1
             make install > install.log 2>&1
+            cd ..
             # threaded version
             if [ "$ENABLE_OMP" = "__TRUE__" ] ; then
-                make -j $NPROCS clean > clean.log 2>&1
-                ./configure  --prefix=${pkg_install_dir} \
-                             --enable-openmp=yes \
-                             --enable-shared=$shared_flag \
-                             --enable-static=yes \
-                             FC=${MPIFC} \
-                             CC=${MPICC} \
-                             CXX=${MPICXX} \
-                             FCFLAGS="${FCFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS} -ffree-line-length-none" \
-                             CFLAGS="${CFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
-                             CXXFLAGS="${CXXFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
-                             LDFLAGS="-Wl,--enable-new-dtags ${MATH_LDFLAGS} ${SCALAPACK_LDFLAGS} ${cray_ldflags}" \
-                             LIBS="${SCALAPACK_LIBS} ${MATH_LIBS}" \
-                             > configure.log 2>&1
+                mkdir -p obj_thread; cd obj_thread
+                ../configure  --prefix=${pkg_install_dir} \
+                              --enable-openmp=yes \
+                              --enable-shared=$shared_flag \
+                              --enable-static=yes \
+                              FC=${MPIFC} \
+                              CC=${MPICC} \
+                              CXX=${MPICXX} \
+                              FCFLAGS="${FCFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS} -ffree-line-length-none" \
+                              CFLAGS="${CFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
+                              CXXFLAGS="${CXXFLAGS} ${MATH_CFLAGS} ${SCALAPACK_CFLAGS}" \
+                              LDFLAGS="-Wl,--enable-new-dtags ${MATH_LDFLAGS} ${SCALAPACK_LDFLAGS} ${cray_ldflags}" \
+                              LIBS="${SCALAPACK_LIBS} ${MATH_LIBS}" \
+                              > configure.log 2>&1
                 make -j $NPROCS >  make.log 2>&1
                 make install > install.log 2>&1
+                cd ..
             fi
             cd ..
             touch "${install_lock_file}"
         fi
-        ELPA_CFLAGS="-I'${pkg_install_dir}/include/elpa-${elpa_ver}/modules'"
-        ELPA_CFLAGS_OMP="-I'${pkg_install_dir}/include/elpa_openmp-${elpa_ver}/modules'"
+        ELPA_CFLAGS="-I'${pkg_install_dir}/include/elpa-${elpa_ver}/modules' -I'${pkg_install_dir}/include/elpa-${elpa_ver}/elpa'"
+        ELPA_CFLAGS_OMP="-I'${pkg_install_dir}/include/elpa_openmp-${elpa_ver}/modules' -I'${pkg_install_dir}/include/elpa_openmp-${elpa_ver}/elpa'"
         ELPA_LDFLAGS="-L'${pkg_install_dir}/lib' -Wl,-rpath='${pkg_install_dir}/lib'"
         ;;
     __SYSTEM__)
@@ -118,9 +121,8 @@ case "$with_elpa" in
         # get the include paths
         elpa_include="$(find_in_paths "elpa-*" $INCLUDE_PATHS)"
         if [ "$elpa_include" != "__FALSE__" ] ; then
-            echo "ELPA include directory is found to be $elpa_include/modules"
-            elpa_include="$elpa_include/modules"
-            ELPA_CFLAGS="-I'$elpa_include'"
+            echo "ELPA include directory is found to be $elpa_include"
+            ELPA_CFLAGS="-I'$elpa_include/modules' -I'$elpa_include/elpa'"
         else
             echo "Cannot find elpa-* from paths $INCLUDE_PATHS"
             exit 1
@@ -128,9 +130,8 @@ case "$with_elpa" in
         if [ "$ENABLE_OMP" = "__TRUE__" ] ; then
             elpa_include_omp="$(find_in_paths "elpa_openmp-*" $INCLUDE_PATHS)"
             if [ "$elpa_include_omp" != "__FALSE__" ] ; then
-                echo "ELPA include directory threaded version is found to be $elpa_include_omp/modules"
-                elpa_include_omp="$elpa_include_omp/modules"
-                ELPA_CFLAGS_OMP="-I'$elpa_include_omp'"
+                echo "ELPA include directory threaded version is found to be $elpa_include_omp"
+                ELPA_CFLAGS_OMP="-I'$elpa_include_omp/modules' -I'$elpa_include_omp/elpa'"
             else
                 echo "Cannot find elpa_openmp-${elpa_ver} from paths $INCLUDE_PATHS"
                 exit 1
@@ -150,9 +151,8 @@ case "$with_elpa" in
         elpa_include="$(find_in_paths "elpa-*" user_include_path)"
         if [ "$elpa_include" != "__FALSE__" ] ; then
             echo "ELPA include directory is found to be $elpa_include/modules"
-            elpa_include="$elpa_include/modules"
-            check_dir "$elpa_include"
-            ELPA_CFLAGS="-I'$elpa_include'"
+            check_dir "$elpa_include/modules"
+            ELPA_CFLAGS="-I'$elpa_include/modules' -I'$elpa_include/elpa'"
         else
             echo "Cannot find elpa-* from path $user_include_path"
             exit 1
@@ -161,9 +161,8 @@ case "$with_elpa" in
             elpa_include_omp="$(find_in_paths "elpa_openmp-*" user_include_path)"
             if [ "$elpa_include_omp" != "__FALSE__" ] ; then
                 echo "ELPA include directory threaded version is found to be $elpa_include_omp/modules"
-                elpa_include_omp="$elpa_include_omp/modules"
-                check_dir "$elpa_include_omp"
-                ELPA_CFLAGS_OMP="-I'$elpa_include_omp'"
+                check_dir "$elpa_include_omp/modules"
+                ELPA_CFLAGS_OMP="-I'$elpa_include_omp/modules' -I'$elpa_include_omp/elpa'"
             else
                 echo "Cannot find elpa_openmp-* from path $user_include_path"
                 exit 1
@@ -195,7 +194,7 @@ export ELPA_LIBS="${ELPA_LIBS}"
 export ELPA_CFLAGS_OMP="${ELPA_CFLAGS_OMP}"
 export ELPA_LDFLAGS_OMP="${ELPA_LDFLAGS_OMP}"
 export ELPA_LIBS_OMP="${ELPA_LIBS_OMP}"
-export CP_DFLAGS="\${CP_DFLAGS} IF_MPI(-D__ELPA3|)"
+export CP_DFLAGS="\${CP_DFLAGS} IF_MPI(-D__ELPA=${elpa_ver:0:4}${elpa_ver:5:2}|)"
 export CP_CFLAGS="\${CP_CFLAGS} IF_MPI(IF_OMP(${ELPA_CFLAGS_OMP}|${ELPA_CFLAGS})|)"
 export CP_LDFLAGS="\${CP_LDFLAGS} IF_MPI(${ELPA_LDFLAGS}|)"
 export CP_LIBS="IF_MPI(IF_OMP(${ELPA_LIBS_OMP}|${ELPA_LIBS})|) \${CP_LIBS}"

@@ -13,52 +13,47 @@
 !> \author Joost VandeVondele (2003-08)
 ! **************************************************************************************************
 MODULE cp_fm_diag
-USE cp_log_handling, ONLY: cp_logger_type, cp_get_default_logger, cp_logger_get_default_unit_nr, cp_logger_get_unit_nr
-  USE machine,                         ONLY: m_memory
-  USE cp_blacs_calls,                  ONLY: cp_blacs_gridexit,&
-                                             cp_blacs_gridinit
-  USE cp_blacs_env,                    ONLY: cp_blacs_env_create,&
-                                             cp_blacs_env_release
-  USE cp_fm_cholesky,                  ONLY: cp_fm_cholesky_decompose
-  USE cp_fm_basic_linalg,              ONLY: cp_fm_syrk,&
-                                             cp_fm_gemm,&
-                                             cp_fm_scale,&
-                                             cp_fm_column_scale,&
-                                             cp_fm_triangular_multiply,&
-                                             cp_fm_triangular_invert,&
-                                             cp_fm_upper_to_full
-  USE cp_fm_struct,                    ONLY: cp_fm_struct_create,&
-                                             cp_fm_struct_release,&
-                                             cp_fm_struct_type,&
-                                             cp_fm_struct_get
-  USE cp_fm_types,                     ONLY: cp_fm_create,&
-                                             cp_fm_release,&
-                                             cp_fm_get_info,&
-                                             cp_fm_set_element,&
-                                             cp_fm_to_fm,&
-                                             cp_fm_type
-  USE cp_para_env,                     ONLY: cp_para_env_create,&
-                                             cp_para_env_release
-  USE cp_blacs_env,                    ONLY: cp_blacs_env_type
-  USE cp_para_types,                   ONLY: cp_para_env_type
-  USE kinds,                           ONLY: dp
-  USE message_passing,                 ONLY: mp_bcast,&
-                                             mp_comm_free,&
-                                             mp_comm_split,&
-                                             mp_comm_split_direct,&
-                                             mp_sync
+   USE cp_blacs_calls,                  ONLY: cp_blacs_gridexit,&
+                                              cp_blacs_gridinit
+   USE cp_blacs_env,                    ONLY: cp_blacs_env_create,&
+                                              cp_blacs_env_release,&
+                                              cp_blacs_env_type
+   USE cp_fm_basic_linalg,              ONLY: cp_fm_column_scale,&
+                                              cp_fm_gemm,&
+                                              cp_fm_scale,&
+                                              cp_fm_syrk,&
+                                              cp_fm_triangular_invert,&
+                                              cp_fm_triangular_multiply,&
+                                              cp_fm_upper_to_full
+   USE cp_fm_cholesky,                  ONLY: cp_fm_cholesky_decompose
+   USE cp_fm_elpa,                      ONLY: cp_fm_diag_elpa,&
+                                              set_elpa_kernel
+   USE cp_fm_struct,                    ONLY: cp_fm_struct_create,&
+                                              cp_fm_struct_release,&
+                                              cp_fm_struct_type
+   USE cp_fm_types,                     ONLY: cp_fm_create,&
+                                              cp_fm_get_info,&
+                                              cp_fm_release,&
+                                              cp_fm_set_element,&
+                                              cp_fm_to_fm,&
+                                              cp_fm_type
+   USE cp_log_handling,                 ONLY: cp_get_default_logger,&
+                                              cp_logger_get_default_unit_nr,&
+                                              cp_logger_get_unit_nr,&
+                                              cp_logger_type
+   USE cp_para_env,                     ONLY: cp_para_env_create,&
+                                              cp_para_env_release
+   USE cp_para_types,                   ONLY: cp_para_env_type
+   USE kinds,                           ONLY: dp
+   USE machine,                         ONLY: m_memory
+   USE message_passing,                 ONLY: mp_bcast,&
+                                              mp_comm_free,&
+                                              mp_comm_split,&
+                                              mp_sync
 #if defined (__HAS_IEEE_EXCEPTIONS)
   USE ieee_exceptions,                 ONLY: ieee_get_halting_mode,&
                                              ieee_set_halting_mode,&
                                              ieee_all
-#endif
-
-#if defined(__ELPA) || defined(__ELPA2)
-  USE ELPA2, ONLY: solve_evp_real_2stage              ! ELPA[1-2] and deprecated ELPA3 interface
-#elif defined(__ELPA3)
-  USE ELPA2, ONLY: elpa_solve_evp_real_2stage         ! new ELPA3 interface
-#elif defined(__ELPA4)
-  USE ELPA2, ONLY: elpa_solve_evp_real_2stage_double  ! ELPA4 interface
 #endif
 
 #include "../base/base_uses.f90"
@@ -71,7 +66,6 @@ USE cp_log_handling, ONLY: cp_logger_type, cp_get_default_logger, cp_logger_get_
 
    ! these saved variables are DIAGONALIZATION global
    INTEGER, SAVE :: diag_type = 0
-   INTEGER, SAVE :: kernel_type = 0
 
    ! Public subroutines
 
@@ -97,32 +91,44 @@ CONTAINS
 ! **************************************************************************************************
    SUBROUTINE diag_init(diag_lib, switched, k_elpa)
       CHARACTER(LEN=*), INTENT(IN)                       :: diag_lib
-      LOGICAL, INTENT(OUT)                               :: switched
-      INTEGER, INTENT(IN), OPTIONAL                      :: k_elpa
+      LOGICAL, INTENT(INOUT)                             :: switched
+      INTEGER, INTENT(IN)                                :: k_elpa
 
       CHARACTER(len=*), PARAMETER :: routineN = 'diag_init', routineP = moduleN//':'//routineN
 
-      ! consider compile-time request for a specific diagonalization method/routine
-#if defined (__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4)
-      diag_type = 3
-#elif defined (__SCALAPACK2)
-      diag_type = 2
-#else ! ScaLAPACK is the default and always linked
-      diag_type = 1
-#endif
+      LOGICAL                                            :: try_library
 
-      IF (diag_lib .EQ. "ELPA") THEN
-         switched = (diag_type.NE.3)
-      ELSE IF (diag_lib .EQ. "SL2") THEN
-         switched = (diag_type.NE.2)
+      ! scalapack is the default and always linked
+      IF (diag_lib .EQ. "SL") THEN
+         try_library = .FALSE.
+         diag_type = 1
       ELSE
-         CPASSERT(diag_lib .EQ. "SL")
-         switched = (diag_type.NE.1)
+         try_library = .TRUE.
       END IF
 
-      IF (diag_type == 3 .AND. PRESENT(k_elpa)) THEN
-         kernel_type = k_elpa
+      IF (try_library) THEN
+         IF (diag_lib .EQ. "ELPA") THEN
+
+#if defined (__ELPA)
+            diag_type = 3
+#else
+            ! ELPA library not linked, switch to SL
+            diag_type = 1
+            switched = .TRUE.
+#endif
+         ELSE IF (diag_lib .EQ. "SL2") THEN
+
+#if defined (__SCALAPACK2)
+            diag_type = 2
+#else
+            ! SL2 library not linked, switch to SL
+            diag_type = 1
+            switched = .TRUE.
+#endif
+         END IF
       END IF
+
+      CALL set_elpa_kernel(k_elpa)
 
       ! Check that one of the diagonalization type is set
       IF (diag_type < 1) THEN
@@ -162,7 +168,7 @@ CONTAINS
       CALL m_memory()
 
       IF (diag_type == 3) THEN
-         CALL cp_fm_elpa(matrix, eigenvectors, eigenvalues)
+         CALL cp_fm_diag_elpa(matrix, eigenvectors, eigenvalues)
       ELSE IF (diag_type == 2) THEN
          CALL cp_fm_syevr(matrix, eigenvectors, eigenvalues, 1, nmo)
       ELSE IF (diag_type == 1) THEN
@@ -892,129 +898,6 @@ CONTAINS
       CALL timestop(handle)
 
    END SUBROUTINE cp_fm_syevr
-
-! **************************************************************************************************
-!> \brief ...
-!> \param matrix ...
-!> \param eigenvectors ...
-!> \param eigenvalues ...
-! **************************************************************************************************
-   SUBROUTINE cp_fm_elpa(matrix, eigenvectors, eigenvalues)
-
-      TYPE(cp_fm_type), POINTER                :: matrix, eigenvectors
-      REAL(KIND=dp), DIMENSION(:)              :: eigenvalues
-
-      CHARACTER(len=*), PARAMETER :: routineN = 'cp_fm_elpa', &
-                                     routineP = moduleN//':'//routineN
-
-      INTEGER                                  :: handle
-#if defined(__SCALAPACK) && (defined(__ELPA) || defined (__ELPA2) || defined(__ELPA3) || defined(__ELPA4))
-      INTEGER                                  :: comm_col, comm_row, group, &
-                                                  mypcol, myprow, n, &
-                                                  n_rows, n_cols, &
-                                                  nblk, neig
-      LOGICAL                                  :: success
-      REAL(KIND=dp), DIMENSION(:), POINTER     :: eval
-      REAL(KIND=dp), DIMENSION(:, :), POINTER  :: m, v
-      TYPE(cp_blacs_env_type), POINTER         :: context
-#endif
-
-      CALL timeset(routineN, handle)
-#if defined(__SCALAPACK) && (defined(__ELPA) || defined (__ELPA2) || defined (__ELPA3) || defined (__ELPA4))
-
-      success = .TRUE.
-
-      n = matrix%matrix_struct%nrow_global
-      m => matrix%local_data
-      context => matrix%matrix_struct%context
-      myprow = context%mepos(1)
-      mypcol = context%mepos(2)
-      group = matrix%matrix_struct%para_env%group
-
-      ! For ELPA, the MPI communicators along rows/cols are sufficient
-      ! mpi communicators are created, needed for communicating within
-      ! rows or columns of processes
-      CALL mp_comm_split_direct(group, comm_row, mypcol, myprow)
-      CALL mp_comm_split_direct(group, comm_col, myprow, mypcol)
-
-      v => eigenvectors%local_data
-
-      ! elpa needs the full matrix
-      CALL cp_fm_upper_to_full(matrix, eigenvectors)
-
-      CALL cp_fm_struct_get(matrix%matrix_struct, &
-                            local_leading_dimension=n_rows, &
-                            ncol_local=n_cols, &
-                            nrow_block=nblk)
-
-      neig = SIZE(eigenvalues, 1)
-
-      ! ELPA will fail in 'solve_tridi', with no useful error message
-      IF (n_cols == 0) &
-         CPABORT("ELPA [pre-fail]: Problem contains processor column with zero width.")
-
-      ! the full eigenvalues vector is needed
-      ALLOCATE (eval(n))
-
-      ! Calculate eigenvalues/eigenvectors
-#if defined (__ELPA)
-      CALL solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, comm_row, comm_col, group)
-#elif defined (__ELPA2)
-      IF (kernel_type == 0) THEN ! let ELPA choose the kernel
-         success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, comm_row, comm_col, group, &
-                                         useQR=.FALSE.)
-      ELSE
-         success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, comm_row, comm_col, group, &
-                                         THIS_REAL_ELPA_KERNEL_API=kernel_type, &
-                                         useQR=.FALSE.)
-      END IF
-#elif defined(__ELPA3)
-      IF (kernel_type == 0) THEN ! let ELPA choose the kernel
-         success = elpa_solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
-                                              comm_row, comm_col, group, &
-                                              useQR=.FALSE.)
-      ELSE
-         success = elpa_solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
-                                              comm_row, comm_col, group, &
-                                              THIS_REAL_ELPA_KERNEL_API=kernel_type, &
-                                              useQR=.FALSE.)
-      END IF
-#elif defined(__ELPA4)
-      IF (kernel_type == 0) THEN ! let ELPA choose the kernel
-         success = elpa_solve_evp_real_2stage_double(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
-                                                     comm_row, comm_col, group, &
-                                                     useQR=.FALSE.)
-      ELSE
-         success = elpa_solve_evp_real_2stage_double(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
-                                                     comm_row, comm_col, group, &
-                                                     THIS_REAL_ELPA_KERNEL_API=kernel_type, &
-                                                     useQR=.FALSE.)
-      END IF
-#endif
-
-      IF (.NOT. success) &
-         CPABORT("ELPA failed to diagonalize a matrix")
-
-      eigenvalues(1:neig) = eval(1:neig)
-
-      DEALLOCATE (eval)
-
-      ! mpi communicators are freed
-      CALL mp_comm_free(comm_row)
-      CALL mp_comm_free(comm_col)
-
-#else
-
-      MARK_USED(matrix)
-      MARK_USED(eigenvectors)
-      MARK_USED(eigenvalues)
-
-      CPABORT("CP2K compiled without the ELPA library.")
-#endif
-
-      CALL timestop(handle)
-
-   END SUBROUTINE cp_fm_elpa
 
 ! **************************************************************************************************
 !> \brief ...

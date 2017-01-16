@@ -757,27 +757,6 @@ MODULE input_constants
    INTEGER, PARAMETER, PUBLIC               :: do_diag_sl = 1, &
                                                do_diag_sl2 = 2, &
                                                do_diag_elpa = 3
-   ! ELPA kernel
-   INTEGER, PARAMETER, PUBLIC               :: elpa_auto = 0, &
-                                               elpa_gen = 1, &
-                                               elpa_gen_sim = 2, &
-                                               elpa_bgp = 3, &
-                                               elpa_bgq = 4, &
-                                               elpa_sse = 5, &
-                                               elpa_sse_b2 = 6, &
-                                               elpa_sse_b4 = 7, &
-                                               elpa_sse_b6 = 8, &
-                                               elpa_avx_b2 = 9, &
-                                               elpa_avx_b4 = 10, &
-                                               elpa_avx_b6 = 11, &
-                                               elpa_avx2_b2 = 12, &
-                                               elpa_avx2_b4 = 13, &
-                                               elpa_avx2_b6 = 14, &
-                                               elpa_avx512_b2 = 15, &
-                                               elpa_avx512_b4 = 16, &
-                                               elpa_avx512_b6 = 17, &
-                                               elpa_gpu = 18
-
    ! FFT library
    ! these might need sync with fft_lib.F
    INTEGER, PARAMETER, PUBLIC               :: do_fft_sg = 1, &
