@@ -268,10 +268,14 @@ ifneq (,$(ELPAROOT))
     else
       DFLAGS  += -D__ELPA$(ELPA)
     endif
-    IFLAGS  += -I$(ELPAROOT)/include/elpa/modules
-    LIBS    += $(ELPAROOT)/lib/libelpa.a
+    ELPAINCDIR = $(dir $(shell ls -1 $(ELPAROOT)/include/*/elpa/elpa_kernel_constants.h | head -n1))
+    ELPAMODDIR = $(ELPAINCDIR)/../modules
+    IFLAGS += -I$(ELPAINCDIR) -I$(ELPAMODDIR)
+    LIBS   += $(ELPAROOT)/lib/libelpa.a
     # in case ELPA is built with OpenMP
-    LIBS    += -Wl,--as-needed -liomp5 -Wl,--no-as-needed
+    ifeq (0,$(OMP))
+      LIBS += -Wl,--as-needed -liomp5 -Wl,--no-as-needed
+    endif
   endif
 endif
 
