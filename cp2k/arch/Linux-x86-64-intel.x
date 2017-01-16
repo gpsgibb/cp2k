@@ -79,7 +79,7 @@ RECONFIGURE ?= 1
 MEMKIND ?= 1
 OFFLOAD ?= 0
 NESTED ?= 0
-ELPA ?= 3
+ELPA ?= 201611
 
 # CP2K's configuation namespace (prefix)
 #
@@ -263,11 +263,7 @@ endif
 
 ifneq (,$(ELPAROOT))
   ifneq (0,$(ELPA))
-    ifeq (1,$(ELPA))
-      DFLAGS  += -D__ELPA
-    else
-      DFLAGS  += -D__ELPA$(ELPA)
-    endif
+    DFLAGS  += -D__ELPA=$(ELPA)
     ELPAINCDIR = $(dir $(shell ls -1 $(ELPAROOT)/include/*/elpa/elpa_kernel_constants.h | head -n1))
     ELPAMODDIR = $(ELPAINCDIR)/../modules
     IFLAGS += -I$(ELPAINCDIR) -I$(ELPAMODDIR)
