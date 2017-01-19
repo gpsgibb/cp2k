@@ -79,7 +79,7 @@ void libxsmm_acc_reconfigure()
 {
   extern libxsmm_acc_dbcsr_config_type LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg));
   libxsmm_acc_dbcsr_config_type& dbcsr_cfg = LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg));
-  bool once = false; // allow to check for multiple reconfigurations
+  static bool once = false; // allow to check for multiple reconfigurations
 
 #if defined(__TBBMALLOC)
   if (!once) {
