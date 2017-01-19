@@ -117,18 +117,23 @@ void libxsmm_acc_reconfigure()
 
 #if defined(__ELPA)
   if (!once) {
-    const char *const diag_lib = "ELPA";
-    LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
-    int k_elpa = 1; // auto
+    const char *const env = getenv("CP2K_ELPA");
+    const int elpa = (0 == env || 0 == *env) ? 2/*enable*/ : atoi(env);
+    if (0 != elpa) {
+      const char *const diag_lib = "ELPA";
+      LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
+      int k_elpa = 1; // auto
 # if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
-    const int cpuid = LIBXSMM_MIN(libxsmm_cpuid(), LIBXSMM_X86_AVX512);
-    if (LIBXSMM_X86_SSE3 <= cpuid) {
-      const int k_elpa_base[] = { 7, 7, 10, 13, 16 }, block2 = 0, block4 = 1, block6 = 2;
-      k_elpa = k_elpa_base[cpuid-(LIBXSMM_X86_SSE3)] + block4;
-      LIBXSMM_UNUSED(block2); LIBXSMM_UNUSED(block6);
-    }
+      if (0 < elpa) {
+        const int cpuid = LIBXSMM_MIN(libxsmm_cpuid(), LIBXSMM_X86_AVX512);
+        if (LIBXSMM_X86_SSE3 <= cpuid) {
+          const int k_elpa_base[] = { 7, 7, 10, 13, 16 }, block = LIBXSMM_MIN(elpa - 1, 2/*block6*/);
+          k_elpa = k_elpa_base[cpuid-(LIBXSMM_X86_SSE3)] + block;
+        }
+      }
 # endif
-    LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(diag_lib, &switched, &k_elpa, strlen(diag_lib));
+      LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(diag_lib, &switched, &k_elpa, strlen(diag_lib));
+    }
   }
 #endif
 
