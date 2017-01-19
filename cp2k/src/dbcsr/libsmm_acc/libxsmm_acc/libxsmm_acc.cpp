@@ -17,14 +17,17 @@
 #endif
 #include <iostream>
 #include <cstdlib>
+#include <cstring>
 #if defined(_OPENMP)
 # include <omp.h>
 #endif
-#if defined(CP2K_CONFIG_PREFIX) && (defined(__MKL) || defined(MKL_DIRECT_CALL_SEQ) || defined(MKL_DIRECT_CALL))
-# include <mkl_service.h>
-#endif
-#if defined(CP2K_CONFIG_PREFIX) && defined(__TBBMALLOC)
-# include <tbb/scalable_allocator.h>
+#if defined(CP2K_CONFIG_PREFIX)
+# if (defined(__MKL) || defined(MKL_DIRECT_CALL_SEQ) || defined(MKL_DIRECT_CALL))
+#   include <mkl_service.h>
+# endif
+# if defined(__TBBMALLOC)
+#   include <tbb/scalable_allocator.h>
+# endif
 #endif
 #if defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
 # include <libxstream_end.h>
@@ -67,35 +70,68 @@ LIBXSMM_ACC_EXTERN void xsmm_acc_abort(const char* filename, int line_number, co
 
 
 #if defined(CP2K_CONFIG_PREFIX)
+# if defined(__ELPA)
+  LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(const char* diag_lib,
+    LIBXSMM_ACC_FTYPE_LOGICAL* switched, const int* k_elpa, int diag_lib_strlen);
+# endif
 
 void libxsmm_acc_reconfigure()
 {
   extern libxsmm_acc_dbcsr_config_type LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg));
   libxsmm_acc_dbcsr_config_type& dbcsr_cfg = LIBXSMM_ACC_FSYMBOL(LIBXSMM_ACC_CONCATENATE(CP2K_CONFIG_PREFIX, dbcsr_cfg));
+  bool once = false; // allow to check for multiple reconfigurations
 
 #if defined(__TBBMALLOC)
-  const char *const env_hugepages = getenv("CP2K_HUGEPAGES");
-  if (0 == env_hugepages || 0 == *env_hugepages || 0 != atoi(env_hugepages)) {
-    scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
+  if (!once) {
+    const char *const env_hugepages = getenv("CP2K_HUGEPAGES");
+    if (0 == env_hugepages || 0 == *env_hugepages || 0 != atoi(env_hugepages)) {
+      scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
+    }
   }
 #endif
-#if defined(_OPENMP) && defined(KMP_VERSION_MAJOR)
-  // setting the stacksize applies independent of nested parallelism (LIBXSMM_ACC_OPENMP)
-  //kmp_set_stacksize(52428800);
+
+#if defined(_OPENMP) && defined(KMP_VERSION_MAJOR) && 0/*disabled*/
+  if (!once) {
+    // setting the stacksize applies independent of nested parallelism (LIBXSMM_ACC_OPENMP)
+    kmp_set_stacksize(52428800);
+  }
 #endif
+
 #if defined(MKL_ENABLE_AVX512)
-  mkl_enable_instructions(MKL_ENABLE_AVX512);
+  if (!once) {
+    mkl_enable_instructions(MKL_ENABLE_AVX512);
+  }
 #endif
+
 #if defined(__LIBXSMM)
-  libxsmm_init();
+  if (!once) {
+    libxsmm_init();
 # if LIBXSMM_VERSION4(1, 6, 1, 83) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
-  libxsmm_set_gemm_auto_prefetch(LIBXSMM_X86_AVX512_MIC != libxsmm_get_target_archid() ? LIBXSMM_PREFETCH_AL2BL2_VIA_C : LIBXSMM_PREFETCH_BL2_VIA_C);
+    libxsmm_set_gemm_auto_prefetch(LIBXSMM_X86_AVX512_MIC != libxsmm_get_target_archid() ? LIBXSMM_PREFETCH_AL2BL2_VIA_C : LIBXSMM_PREFETCH_BL2_VIA_C);
 # endif
 # if LIBXSMM_VERSION4(1, 6, 2, 4) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
-  //libxsmm_set_dispatch_trylock(1);
+    //libxsmm_set_dispatch_trylock(1);
 # endif
-
+  }
 #endif
+
+#if defined(__ELPA)
+  if (!once) {
+    const char *const diag_lib = "ELPA";
+    LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
+    int k_elpa = 1; // auto
+# if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+    const int cpuid = LIBXSMM_MIN(libxsmm_cpuid(), LIBXSMM_X86_AVX512);
+    if (LIBXSMM_X86_SSE3 <= cpuid) {
+      const int k_elpa_base[] = { 7, 7, 10, 13, 16 }, block2 = 0, block4 = 1, block6 = 2;
+      k_elpa = k_elpa_base[cpuid-(LIBXSMM_X86_SSE3)] + block4;
+      LIBXSMM_UNUSED(block2); LIBXSMM_UNUSED(block6);
+    }
+# endif
+    LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(diag_lib, &switched, &k_elpa, strlen(diag_lib));
+  }
+#endif
+
   // better leave "CP2K_DRIVER" environment variable undocumented
   // variable takes the internal literal/number representing MM driver
   const char *const env_driver = getenv("CP2K_DRIVER");
@@ -195,6 +231,9 @@ void libxsmm_acc_reconfigure()
   dbcsr_cfg.accdrv_min_flop_process = LIBXSMM_ACC_ACCDRV_MIN_NFLOPS_PERMM;
 # endif
 #endif
+
+  // check for multiple reconfigurations
+  if (!once) once = true;
 }
 
 
