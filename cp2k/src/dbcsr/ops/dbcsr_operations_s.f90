@@ -49,8 +49,8 @@
           IF(a_col.ne.a_row) CYCLE
           ! We must skip non-local blocks in a replicated matrix.
           IF(matrix_a%replication_type .NE. dbcsr_repl_full) THEN
-             IF (mynode .NE. checker_square_proc (a_row, a_col, pgrid,&
-                  row_dist, col_dist)) CYCLE
+             IF (mynode .NE. checker_square_proc (a_row, a_col, pgrid, row_dist, col_dist)) &
+                CYCLE
           ENDIF
           a_col_size = col_blk_size(a_col)
           IF(a_row_size.NE.a_col_size)&
@@ -238,11 +238,32 @@
   SUBROUTINE dbcsr_set_s(matrix, alpha)
     TYPE(dbcsr_type), INTENT(INOUT)           :: matrix
     REAL(kind=real_4), INTENT(IN)                      :: alpha
+
+    CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_set'
+
+      INTEGER                                            :: col, handle, row
+      TYPE(dbcsr_iterator)                               :: iter
+      REAL(kind=real_4), DIMENSION(:,:), POINTER                   :: block
+      LOGICAL                                            :: tr
+
+    CALL timeset(routineN, handle)
+
     IF (alpha==0.0_real_4) THEN
       CALL dbcsr_zero(matrix)
     ELSE
-      CALL dbcsr_set_anytype(matrix, dbcsr_scalar(alpha))
+       IF(dbcsr_get_data_type (matrix) /=  dbcsr_type_real_4) &
+         CPABORT("Incompatible data types")
+
+      !TODO: could be speedup by direct assigment to data_area, similar to dbcsr_zero()
+      CALL dbcsr_iterator_start(iter, matrix)
+      DO WHILE (dbcsr_iterator_blocks_left(iter))
+         CALL dbcsr_iterator_next_block(iter, row, col, block, tr)
+         block(:,:) = alpha
+      ENDDO
+      CALL dbcsr_iterator_stop(iter)
     ENDIF
+
+    CALL timestop(handle)
   END SUBROUTINE dbcsr_set_s
 
 ! **************************************************************************************************
@@ -271,21 +292,42 @@
 ! **************************************************************************************************
   SUBROUTINE dbcsr_set_diag_s(matrix, diag)
     TYPE(dbcsr_type), INTENT(INOUT)            :: matrix
-    REAL(kind=real_4), DIMENSION(:), INTENT(IN), TARGET :: diag
+    REAL(kind=real_4), DIMENSION(:), INTENT(IN)          :: diag
 
-    CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_set_diag_s', &
-      routineP = moduleN//':'//routineN
+    CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_set_diag'
 
-    REAL(kind=real_4), DIMENSION(:), POINTER           :: diag_p
-    TYPE(dbcsr_data_obj)                     :: diag_a
+    INTEGER                                            :: icol, irow, row_offset, handle, i
+    LOGICAL                                            :: tr
+    TYPE(dbcsr_iterator)                               :: iter
+    REAL(kind=real_4), DIMENSION(:,:), POINTER                   :: block
 
-    diag_p => diag
-    CALL dbcsr_data_init (diag_a)
-    CALL dbcsr_data_new (diag_a, dbcsr_get_data_type(matrix))
-    CALL dbcsr_data_set_pointer (diag_a, diag_p)
-    CALL dbcsr_set_diag(matrix, diag_a)
-    CALL dbcsr_data_clear_pointer (diag_a)
-    CALL dbcsr_data_release (diag_a)
+
+    CALL timeset(routineN, handle)
+
+    IF(dbcsr_get_data_type (matrix) /=  dbcsr_type_real_4) &
+         CPABORT("Incompatible data types")
+
+    IF (dbcsr_nfullrows_total(matrix) /= SIZE(diag)) &
+         CPABORT("Diagonal has wrong size")
+
+    IF (.NOT. array_equality(dbcsr_row_block_offsets(matrix), dbcsr_row_block_offsets(matrix))) &
+        CPABORT("matrix not quadratic")
+
+    CALL dbcsr_iterator_start(iter, matrix)
+    DO WHILE (dbcsr_iterator_blocks_left(iter))
+       CALL dbcsr_iterator_next_block(iter, irow, icol, block, tr, row_offset=row_offset)
+       IF (irow /= icol) CYCLE
+
+       IF(sIZE(block, 1) /= sIZE(block, 2)) &
+          CPABORT("Diagonal block non-squared")
+
+       DO i = 1 , sIZE(block, 1)
+          block(i,i) = diag(row_offset+i-1)
+       END DO
+    ENDDO
+    CALL dbcsr_iterator_stop(iter)
+
+    CALL timestop(handle)
   END SUBROUTINE dbcsr_set_diag_s
 
 ! **************************************************************************************************
@@ -294,37 +336,96 @@
 !> \param diag ...
 ! **************************************************************************************************
   SUBROUTINE dbcsr_get_diag_s(matrix, diag)
+    TYPE(dbcsr_type), INTENT(IN)               :: matrix
+    REAL(kind=real_4), DIMENSION(:), INTENT(OUT)         :: diag
 
-    TYPE(dbcsr_type), INTENT(IN)                    :: matrix
-    REAL(kind=real_4), DIMENSION(:), INTENT(INOUT), TARGET   :: diag
+    CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_get_diag'
 
-    CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_get_diag_s', &
-      routineP = moduleN//':'//routineN
+    INTEGER                                            :: icol, irow, row_offset, handle, i
+    LOGICAL                                            :: tr
+    TYPE(dbcsr_iterator)                               :: iter
+    REAL(kind=real_4), DIMENSION(:,:), POINTER                   :: block
 
-    REAL(kind=real_4), DIMENSION(:), POINTER           :: diag_p
-    TYPE(dbcsr_data_obj)                     :: diag_a
 
-    diag_p => diag
-    CALL dbcsr_data_init (diag_a)
-    CALL dbcsr_data_new (diag_a, dbcsr_get_data_type(matrix))
-    CALL dbcsr_data_set_pointer (diag_a, diag_p)
-    CALL dbcsr_get_diag(matrix, diag_a)
-    CALL dbcsr_data_clear_pointer (diag_a)
-    CALL dbcsr_data_release (diag_a)
+    CALL timeset(routineN, handle)
+
+    IF(dbcsr_get_data_type (matrix) /=  dbcsr_type_real_4) &
+         CPABORT("Incompatible data types")
+
+    IF (dbcsr_nfullrows_total(matrix) /= SIZE(diag)) &
+         CPABORT("Diagonal has wrong size")
+
+    IF (.NOT. array_equality(dbcsr_row_block_offsets(matrix), dbcsr_row_block_offsets(matrix))) &
+        CPABORT("matrix not quadratic")
+
+    diag(:) = 0.0_real_4
+
+    CALL dbcsr_iterator_start(iter, matrix)
+    DO WHILE (dbcsr_iterator_blocks_left(iter))
+       CALL dbcsr_iterator_next_block(iter, irow, icol, block, tr, row_offset=row_offset)
+       IF (irow /= icol) CYCLE
+
+       IF(sIZE(block, 1) /= sIZE(block, 2)) &
+          CPABORT("Diagonal block non-squared")
+
+       DO i = 1 , sIZE(block, 1)
+          diag(row_offset+i-1) = block(i,i)
+       END DO
+    ENDDO
+    CALL dbcsr_iterator_stop(iter)
+
+    CALL timestop(handle)
   END SUBROUTINE dbcsr_get_diag_s
-
 
 ! **************************************************************************************************
 !> \brief add a constant to the diagonal of a matrix
 !> \param[inout] matrix       DBCSR matrix
-!> \param[in]    alpha_scalar scalar
-!> \param first_row ...
-!> \param last_row ...
+!> \param[in]    alpha scalar
 ! **************************************************************************************************
-  SUBROUTINE dbcsr_add_on_diag_s(matrix, alpha_scalar, first_row, last_row)
-    TYPE(dbcsr_type), INTENT(INOUT)           :: matrix
-    REAL(kind=real_4), INTENT(IN)                      :: alpha_scalar
-    integer, intent(in), optional            :: first_row, last_row
+   SUBROUTINE dbcsr_add_on_diag_s(matrix, alpha)
+      TYPE(dbcsr_type), INTENT(INOUT)                    :: matrix
+      REAL(kind=real_4), INTENT(IN)                                :: alpha
 
-    CALL dbcsr_add_on_diag(matrix, dbcsr_scalar(alpha_scalar), first_row, last_row)
-  END SUBROUTINE dbcsr_add_on_diag_s
+
+      CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_add_on_diag'
+
+      INTEGER                                            :: handle, mynode, node, irow, i, row_size
+      LOGICAL                                            :: found, tr
+      REAL(kind=real_4), DIMENSION(:,:), POINTER                   :: block
+
+      CALL timeset(routineN, handle)
+
+      IF(dbcsr_get_data_type (matrix) /=  dbcsr_type_real_4) &
+         CPABORT("Incompatible data types")
+
+      IF (.NOT. array_equality(dbcsr_row_block_offsets(matrix), dbcsr_row_block_offsets(matrix))) &
+         CPABORT("matrix not quadratic")
+
+      mynode = dbcsr_mp_mynode(dbcsr_distribution_mp(dbcsr_distribution(matrix)))
+
+      CALL dbcsr_work_create(matrix, work_mutable=.TRUE.)
+
+      DO irow = 1, dbcsr_nblkrows_total(matrix)
+         CALL dbcsr_get_stored_coordinates(matrix, irow, irow, node)
+         IF (node /= mynode) CYCLE
+
+         CALL dbcsr_get_block_p(matrix, irow, irow, block, tr, found, row_size=row_size)
+         IF (.NOT.found) THEN
+            ALLOCATE(block(row_size,row_size))
+            block(:,:) = 0.0_real_4
+         ENDIF
+
+         DO i = 1, row_size
+             block(i,i) = block(i,i) + alpha
+         END DO
+
+         IF (.NOT.found) THEN
+            CALL dbcsr_put_block(matrix, irow, irow, block)
+            DEALLOCATE(block)
+         ENDIF
+      ENDDO
+
+      CALL dbcsr_finalize(matrix)
+      CALL timestop(handle)
+   END SUBROUTINE dbcsr_add_on_diag_s
+

@@ -341,7 +341,7 @@
     TYPE(dbcsr_type), INTENT(INOUT)       :: matrix
     REAL(kind=real_4), INTENT(IN)                      :: alpha
 
-    CALL dbcsr_set_prv(matrix%prv, dbcsr_conform_scalar (alpha, matrix))
+    CALL dbcsr_set_prv(matrix%prv, alpha)
   END SUBROUTINE dbcsr_set_s
 
 
@@ -359,6 +359,44 @@
 
     CALL dbcsr_add_prv(matrix_a%prv, matrix_b%prv, alpha_scalar, beta_scalar)
   END SUBROUTINE dbcsr_add_s
+
+! **************************************************************************************************
+!> \brief ...
+!> \param matrix ...
+!> \param alpha_scalar ...
+!> \param first_row ...
+!> \param last_row ...
+! **************************************************************************************************
+   SUBROUTINE dbcsr_add_on_diag_s(matrix, alpha_scalar)
+      TYPE(dbcsr_type), INTENT(INOUT)                    :: matrix
+      REAL(kind=real_4), INTENT(IN)                                :: alpha_scalar
+
+      CALL dbcsr_add_on_diag_prv(matrix%prv, alpha_scalar)
+   END SUBROUTINE dbcsr_add_on_diag_s
+
+! **************************************************************************************************
+!> \brief ...
+!> \param matrix ...
+!> \param diag ...
+! **************************************************************************************************
+   SUBROUTINE dbcsr_set_diag_s(matrix, diag)
+      TYPE(dbcsr_type), INTENT(INOUT)                    :: matrix
+      REAL(kind=real_4), DIMENSION(:), INTENT(IN)                  :: diag
+
+      CALL dbcsr_set_diag_prv(matrix%prv, diag)
+   END SUBROUTINE dbcsr_set_diag_s
+
+! **************************************************************************************************
+!> \brief ...
+!> \param matrix ...
+!> \param diag ...
+! **************************************************************************************************
+   SUBROUTINE dbcsr_get_diag_s(matrix, diag)
+      TYPE(dbcsr_type), INTENT(IN)                       :: matrix
+      REAL(kind=real_4), DIMENSION(:), INTENT(OUT)                 :: diag
+
+      CALL dbcsr_get_diag_prv(matrix%prv, diag)
+   END SUBROUTINE dbcsr_get_diag_s
 
 ! **************************************************************************************************
 !> \brief ...

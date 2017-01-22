@@ -4,50 +4,6 @@
 !--------------------------------------------------------------------------------------------------!
 
 ! **************************************************************************************************
-!> \brief Sets the diagonal of a square data block
-!> \param[out] block_data     sets the diagonal of this data block
-!> \param[in] diagonal        set diagonal of block_data to these values
-!> \param[in] d               dimension of block
-!> \par Off-diagonal values
-!>      Other values are untouched.
-! **************************************************************************************************
-  PURE SUBROUTINE set_block2d_diagonal_z (block_data, diagonal, d)
-    INTEGER, INTENT(IN)                    :: d
-    COMPLEX(kind=real_8), DIMENSION(d,d), INTENT(INOUT) :: block_data
-    COMPLEX(kind=real_8), DIMENSION(d), INTENT(IN)      :: diagonal
-
-    INTEGER                                :: i
-
-!   ---------------------------------------------------------------------------
-
-    DO i = 1 , d
-       block_data(i,i) = diagonal(i)
-    END DO
-  END SUBROUTINE set_block2d_diagonal_z
-
-
-! **************************************************************************************************
-!> \brief Gets the diagonal of a square data block
-!> \param[in] block_data      gets the diagonal of this data block
-!> \param[out] diagonal       values of the diagonal elements
-!> \param[in] d               dimension of block
-! **************************************************************************************************
-  PURE SUBROUTINE get_block2d_diagonal_z (block_data, diagonal, d)
-    INTEGER, INTENT(IN)                 :: d
-    COMPLEX(kind=real_8), DIMENSION(d,d), INTENT(IN) :: block_data
-    COMPLEX(kind=real_8), DIMENSION(d), INTENT(OUT)  :: diagonal
-
-    INTEGER                             :: i
-
-!   ---------------------------------------------------------------------------
-
-    DO i = 1 , d
-       diagonal(i) = block_data(i, i)
-    END DO
-  END SUBROUTINE get_block2d_diagonal_z
-
-
-! **************************************************************************************************
 !> \brief Copies a block subset
 !> \param dst ...
 !> \param dst_rs ...
@@ -625,64 +581,6 @@
     ENDIF
     CALL memory_copy(dst%d%c_dp(lb:ub),src(lb_s:ub_s),data_size)
   END SUBROUTINE dbcsr_data_set_az
-
-! **************************************************************************************************
-!> \brief ...
-!> \param m ...
-!> \param blk ...
-!> \param alpha ...
-!> \param imin ...
-!> \param imax ...
-! **************************************************************************************************
-  PURE SUBROUTINE block_2d_add_on_diag_z(m, blk, alpha, imin, imax)
-    INTEGER, INTENT(IN)                      :: m
-    COMPLEX(kind=real_8), INTENT(INOUT), DIMENSION(m,m)   :: blk
-    COMPLEX(kind=real_8), INTENT(IN)                      :: alpha
-    INTEGER, INTENT(IN), OPTIONAL            :: imin, imax
-
-    CHARACTER(len=*), PARAMETER :: routineN = 'block_2d_add_on_diag_z', &
-      routineP = moduleN//':'//routineN
-
-    INTEGER                                  :: i
-
-!   ---------------------------------------------------------------------------
-
-    IF(PRESENT(imin).AND.PRESENT(imax)) THEN
-       DO i = MAX(1,imin),MIN(m,imax)
-         blk(i,i) = blk(i,i) + alpha
-       ENDDO
-    ELSE
-       DO i = 1,m
-          blk(i,i) = blk(i,i) + alpha
-       END DO
-    ENDIF
-  END SUBROUTINE block_2d_add_on_diag_z
-
-! **************************************************************************************************
-!> \brief ...
-!> \param m ...
-!> \param blk ...
-!> \param alpha ...
-!> \param imin ...
-!> \param imax ...
-! **************************************************************************************************
-  PURE SUBROUTINE block_add_on_diag_z(m, blk, alpha, imin, imax)
-    INTEGER, INTENT(IN)                      :: m
-    COMPLEX(kind=real_8), INTENT(INOUT), DIMENSION(m*m)   :: blk
-    COMPLEX(kind=real_8), INTENT(IN)                      :: alpha
-    INTEGER, INTENT(IN), OPTIONAL            :: imin, imax
-
-    CHARACTER(len=*), PARAMETER :: routineN = 'block_add_on_diag_z', &
-      routineP = moduleN//':'//routineN
-
-!   ---------------------------------------------------------------------------
-
-    IF(PRESENT(imin).AND.PRESENT(imax)) THEN
-       CALL block_2d_add_on_diag_z(m, blk, alpha, imin, imax)
-    ELSE
-       CALL block_2d_add_on_diag_z(m, blk, alpha, 1, m)
-    ENDIF
-  END SUBROUTINE block_add_on_diag_z
 
 ! **************************************************************************************************
 !> \brief ...
