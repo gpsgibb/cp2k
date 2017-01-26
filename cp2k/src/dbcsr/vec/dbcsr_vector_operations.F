@@ -437,7 +437,7 @@ CONTAINS
 !> \param work_col ...
 ! **************************************************************************************************
   SUBROUTINE dbcsr_matrix_vector_mult_${nametype}$(matrix, vec_in, vec_out, alpha, beta, work_row, work_col)
-#if defined(__LIBXSMM) && ${xsmm}
+#if defined(__LIBXSMM) && ${xsmm}$
     USE libxsmm ! WITHOUT ONLY because older library versions (no libxsmm_matmul) should be ignored
 #endif
     TYPE(dbcsr_type)                          :: matrix, vec_in, vec_out
@@ -492,7 +492,7 @@ CONTAINS
        prow=hash_table_get(fast_vec_col%hash_table,row)
        IF(fast_vec_col%blk_map_${nametype}$(prow)%assigned_thread .NE. ithread ) CYCLE
        pcol=hash_table_get(fast_vec_row%hash_table,col)
-#if defined(__LIBXSMM) && ${xsmm}
+#if defined(__LIBXSMM) && ${xsmm}$
        IF (CP_VERSION4(1, 4, 1, 20).LE.CP_VERSION4( &
           LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
           LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
@@ -503,7 +503,7 @@ CONTAINS
 #endif
        fast_vec_col%blk_map_${nametype}$(prow)%ptr=fast_vec_col%blk_map_${nametype}$(prow)%ptr+&
             MATMUL(data_d,TRANSPOSE(fast_vec_row%blk_map_${nametype}$(pcol)%ptr))
-#if defined(__LIBXSMM) && ${xsmm}
+#if defined(__LIBXSMM) && ${xsmm}$
        END IF
 #endif
     END DO
@@ -901,7 +901,7 @@ CONTAINS
 !> \param work_col ...
 ! **************************************************************************************************
   SUBROUTINE dbcsr_sym_matrix_vector_mult_${nametype}$(matrix, vec_in, vec_out, alpha, beta, work_row, work_col)
-#if defined(__LIBXSMM) && ${xsmm}
+#if defined(__LIBXSMM) && ${xsmm}$
     USE libxsmm ! WITHOUT ONLY because older library versions (no libxsmm_matmul) should be ignored
 #endif
     TYPE(dbcsr_type)                          :: matrix, vec_in, vec_out
@@ -974,7 +974,7 @@ CONTAINS
           prow=hash_table_get(fast_vec_col%hash_table,row)
           rpcol=hash_table_get(res_fast_vec_row%hash_table,col)
           IF(res_fast_vec_row%blk_map_${nametype}$(rpcol)%assigned_thread .EQ. ithread .AND. row .NE. col) THEN
-#if defined(__LIBXSMM) && ${xsmm}
+#if defined(__LIBXSMM) && ${xsmm}$
              IF (CP_VERSION4(1, 4, 1, 20).LE.CP_VERSION4( &
                 LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
                 LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
@@ -986,7 +986,7 @@ CONTAINS
 #endif
              res_fast_vec_row%blk_map_${nametype}$(rpcol)%ptr=res_fast_vec_row%blk_map_${nametype}$(rpcol)%ptr+&
                 MATMUL(TRANSPOSE(fast_vec_col%blk_map_${nametype}$(prow)%ptr),data_d)
-#if defined(__LIBXSMM) && ${xsmm}
+#if defined(__LIBXSMM) && ${xsmm}$
             END IF
 #endif
           END IF
