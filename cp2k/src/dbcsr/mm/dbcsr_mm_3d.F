@@ -310,7 +310,7 @@ CONTAINS
       INTEGER, DIMENSION(2)                              :: block_col_bounds, block_row_bounds
       INTEGER, DIMENSION(:), POINTER :: col_dist, col_img_dist, local_cols, local_g2l_map_cols, &
          local_g2l_map_rows, local_refs_data_size, local_rows, meta_buffer_p, meta_recv, &
-         meta_send, row_dist, row_img_dist, threads_dist
+         meta_send, refs_data_size, row_dist, row_img_dist, threads_dist
       INTEGER, DIMENSION(:, :), POINTER                  :: blacs2mpi, local_refs_displ_unmerged, &
                                                             local_refs_meta_size, no_empty_images, &
                                                             no_empty_images_displ
@@ -726,7 +726,7 @@ CONTAINS
 !$OMP         meta_displ_cluster_scatter,meta_size_cluster_scatter,global_indices,&
 !$OMP         do_crop,do_part_crop_row,do_part_crop_col,block_row_bounds,block_col_bounds,&
 !$OMP         do_part_crop_f_row,do_part_crop_l_row,do_part_crop_f_col,do_part_crop_l_col,&
-!$OMP         f_row_f,l_row_l,f_col_f,l_col_l,nblocks,request_win_create)
+!$OMP         f_row_f,l_row_l,f_col_f,l_col_l,nblocks,request_win_create,refs_data_size)
       ithread = 0
 !$    ithread = omp_get_thread_num()
       myt = ithread
@@ -900,9 +900,11 @@ CONTAINS
             ELSE
                local_refs_displ(:, mi, ui) = local_size(:)
             ENDIF
-            IF (local_refs_size(imeta, mi, ui) .EQ. 0) CYCLE
+            ! Exclude communications of empty data size only when nimages_merged>1
+            IF (local_refs_size(imeta, mi, ui) .EQ. 0 .AND. nimages_merged .GT. 1) CYCLE
             local_no_empty_images = local_no_empty_images+1
             local_refs_data_size(local_no_empty_images) = local_refs_size(idata, mi, ui)
+            IF (local_refs_size(imeta, mi, ui) .EQ. 0) CYCLE
             ! Include stats slots
             local_refs_size(imeta, mi, ui) = local_refs_size(imeta, mi, ui)+ &
                                              size_index_unmerged
@@ -984,7 +986,9 @@ CONTAINS
          CALL mp_iallgather(local_refs_displ_unmerged, right_refs_displ_unmerged, &
                             buffer%subgrp, requests(2+irequests))
       ENDIF
-      CALL mp_iallgather(local_no_empty_images, no_empty_images, buffer%subgrp, request_no_empty_images)
+      IF (nimages_merged .GT. 1) THEN
+         CALL mp_iallgather(local_no_empty_images, no_empty_images, buffer%subgrp, request_no_empty_images)
+      ENDIF
       !
       ! Allocate data and meta buffers
       do_win_create(:) = .NOT. buffer%has_rma_win
@@ -1029,7 +1033,7 @@ CONTAINS
          DO dst_proc = 1, nprocs_sym
             DO ui = 1, nimages_unmerged
                DO mi = 1, nimages_merged
-                  ! Empty cluster
+                  ! Empty image
                   IF (local_refs_size(imeta, mi, ui) .EQ. 0) THEN
                      DO it = 0, nthreads
                         recv_refs(:, it, mi, ui, dst_proc) = recv_size(:, dst_proc)
@@ -1495,7 +1499,12 @@ CONTAINS
 !$       DEALLOCATE (locks)
 !$    ENDIF
       !
-      CALL mp_wait(request_no_empty_images)
+      IF (nimages_merged .GT. 1) THEN
+         CALL mp_wait(request_no_empty_images)
+      ELSE
+         no_empty_images(:, :) = local_no_empty_images
+      ENDIF
+      !
       total_no_empty_images = 0
       DO iproc = 1, nprocs
          DO ilayer = 1, UBOUND(no_empty_images_displ, 1)
@@ -1507,13 +1516,18 @@ CONTAINS
       !
       IF (is_left) THEN
          ALLOCATE (left_refs_data_size(total_no_empty_images))
-         CALL mp_iallgather(local_refs_data_size(1:local_no_empty_images), &
-                            left_refs_data_size, no_empty_images, no_empty_images_displ, &
-                            buffer%subgrp, requests(4+irequests))
+         refs_data_size => left_refs_data_size
       ELSE
          ALLOCATE (right_refs_data_size(total_no_empty_images))
+         refs_data_size => right_refs_data_size
+      ENDIF
+      IF (nimages_merged .GT. 1) THEN
          CALL mp_iallgather(local_refs_data_size(1:local_no_empty_images), &
-                            right_refs_data_size, no_empty_images, no_empty_images_displ, &
+                            refs_data_size, no_empty_images, no_empty_images_displ, &
+                            buffer%subgrp, requests(4+irequests))
+      ELSE
+         CALL mp_iallgather(local_refs_data_size(1:local_no_empty_images), &
+                            refs_data_size, &
                             buffer%subgrp, requests(4+irequests))
       ENDIF
       !
@@ -1542,9 +1556,14 @@ CONTAINS
                                         size_index_unmerged+1, &
                                         local_max_norms, is_left, &
                                         .NOT. (is_diagonal .AND. do_bcast))
-         CALL mp_iallgather(local_max_norms, max_norms, &
-                            no_empty_images, no_empty_images_displ, &
-                            buffer%subgrp, requests(6+irequests))
+         IF (nimages_merged .GT. 1) THEN
+            CALL mp_iallgather(local_max_norms, max_norms, &
+                               no_empty_images, no_empty_images_displ, &
+                               buffer%subgrp, requests(6+irequests))
+         ELSE
+            CALL mp_iallgather(local_max_norms, max_norms, &
+                               buffer%subgrp, requests(6+irequests))
+         ENDIF
       ENDIF
       !
       DEALLOCATE (img_refs_cols)
@@ -1984,12 +2003,6 @@ CONTAINS
       CALL win_setup(buffers_orig%left, do_win_create_left, request_win_create(1))
       CALL win_setup(buffers_orig%right, do_win_create_right, request_win_create(2))
       !
-      ! Lock RMA windows
-      CALL mp_win_lock_all(buffers_orig%left%data_win)
-      CALL mp_win_lock_all(buffers_orig%left%meta_win)
-      CALL mp_win_lock_all(buffers_orig%right%data_win)
-      CALL mp_win_lock_all(buffers_orig%right%meta_win)
-      !
       ! Count the maximum possible multiplies per row for on-the-fly filtering
       ALLOCATE (product_matrix_epss_size(nrows3D), product_matrix_epss_displ(nrows3D))
       IF (otf_filtering) THEN
@@ -2110,15 +2123,11 @@ CONTAINS
          DO icol3D = 1, ncols3D
             right_displ_vunmerged(icol3D, recv_vrow) = right_no_empty_images_displ(icol3D, iproc+1)
             DO v_ki = recv_vrow, recv_vrow+right_row_nimages-2
-               IF (right_refs_meta_size_layers3D(icol3D, v_ki) .EQ. 0) THEN
-                  right_displ_vunmerged(icol3D, v_ki+1) = right_displ_vunmerged(icol3D, v_ki)
-               ELSE
-                  right_displ_vunmerged(icol3D, v_ki+1) = right_displ_vunmerged(icol3D, v_ki)+1
-                  right_data_size = &
-                     MAX(right_data_size, right_refs_data_size(right_displ_vunmerged(icol3D, v_ki+1)))
-                  right_meta_size = &
-                     MAX(right_meta_size, right_refs_meta_size_layers3D(icol3D, v_ki))
-               ENDIF
+               right_displ_vunmerged(icol3D, v_ki+1) = right_displ_vunmerged(icol3D, v_ki)+1
+               right_data_size = &
+                  MAX(right_data_size, right_refs_data_size(right_displ_vunmerged(icol3D, v_ki+1)))
+               right_meta_size = &
+                  MAX(right_meta_size, right_refs_meta_size_layers3D(icol3D, v_ki))
             ENDDO
             v_ki = recv_vrow+right_row_nimages-1
             IF (right_refs_meta_size_layers3D(icol3D, v_ki) .NE. 0) THEN
@@ -2136,15 +2145,11 @@ CONTAINS
          DO irow3D = 1, nrows3D
             left_displ_vunmerged(irow3D, recv_vcol) = left_no_empty_images_displ(irow3D, iproc+1)
             DO v_ki = recv_vcol, recv_vcol+left_col_nimages-2
-               IF (left_refs_meta_size_layers3D(irow3D, v_ki) .EQ. 0) THEN
-                  left_displ_vunmerged(irow3D, v_ki+1) = left_displ_vunmerged(irow3D, v_ki)
-               ELSE
-                  left_displ_vunmerged(irow3D, v_ki+1) = left_displ_vunmerged(irow3D, v_ki)+1
-                  left_data_size = &
-                     MAX(left_data_size, left_refs_data_size(left_displ_vunmerged(irow3D, v_ki+1)))
-                  left_meta_size = &
-                     MAX(left_meta_size, left_refs_meta_size_layers3D(irow3D, v_ki))
-               ENDIF
+               left_displ_vunmerged(irow3D, v_ki+1) = left_displ_vunmerged(irow3D, v_ki)+1
+               left_data_size = &
+                  MAX(left_data_size, left_refs_data_size(left_displ_vunmerged(irow3D, v_ki+1)))
+               left_meta_size = &
+                  MAX(left_meta_size, left_refs_meta_size_layers3D(irow3D, v_ki))
             ENDDO
             v_ki = recv_vcol+left_col_nimages-1
             IF (left_refs_meta_size_layers3D(irow3D, v_ki) .NE. 0) THEN
@@ -2866,12 +2871,6 @@ CONTAINS
       DEALLOCATE (right_displ_vunmerged, left_displ_vunmerged)
       DEALLOCATE (right_no_empty_images_displ, left_no_empty_images_displ)
       !
-      ! clean-up wins
-      CALL mp_win_unlock_all(buffers_orig%right%data_win)
-      CALL mp_win_unlock_all(buffers_orig%right%meta_win)
-      CALL mp_win_unlock_all(buffers_orig%left%data_win)
-      CALL mp_win_unlock_all(buffers_orig%left%meta_win)
-      !
       ! Deallocate 3D layers
       IF (do_layers3D) THEN
          DO icol3D = 1, ncols3D
@@ -2959,8 +2958,14 @@ CONTAINS
          CALL timeset(routineN//"_win_check", handle)
          CALL mp_wait(request)
          CALL timestop(handle)
-         IF (do_win_create(1)) CALL mp_win_free(buffer%data_win)
-         IF (do_win_create(2)) CALL mp_win_free(buffer%meta_win)
+         IF (do_win_create(1)) THEN
+            CALL mp_win_unlock_all(buffer%data_win)
+            CALL mp_win_free(buffer%data_win)
+         ENDIF
+         IF (do_win_create(2)) THEN
+            CALL mp_win_unlock_all(buffer%meta_win)
+            CALL mp_win_free(buffer%meta_win)
+         ENDIF
       ENDIF
       CALL dbcsr_data_release(buffer%data_resize)
       IF (ASSOCIATED(buffer%meta_resize)) THEN
@@ -2968,8 +2973,14 @@ CONTAINS
          NULLIFY (buffer%meta_resize)
       ENDIF
       !
-      IF (do_win_create(1)) CALL dbcsr_win_create_any(buffer%data(1), buffer%subgrp, buffer%data_win)
-      IF (do_win_create(2)) CALL mp_win_create(buffer%meta, buffer%subgrp, buffer%meta_win)
+      IF (do_win_create(1)) THEN
+         CALL dbcsr_win_create_any(buffer%data(1), buffer%subgrp, buffer%data_win)
+         CALL mp_win_lock_all(buffer%data_win)
+      ENDIF
+      IF (do_win_create(2)) THEN
+         CALL mp_win_create(buffer%meta, buffer%subgrp, buffer%meta_win)
+         CALL mp_win_lock_all(buffer%meta_win)
+      ENDIF
       !
       buffer%has_rma_win = .TRUE.
    END SUBROUTINE win_setup
@@ -3549,12 +3560,6 @@ CONTAINS
       CALL win_setup(buffers_orig%left, do_win_create_left, request_win_create(1))
       CALL win_setup(buffers_orig%right, do_win_create_right, request_win_create(2))
       !
-      ! Lock RMA windows
-      CALL mp_win_lock_all(buffers_orig%left%data_win)
-      CALL mp_win_lock_all(buffers_orig%left%meta_win)
-      CALL mp_win_lock_all(buffers_orig%right%data_win)
-      CALL mp_win_lock_all(buffers_orig%right%meta_win)
-      !
       ALLOCATE (multrec(0:nthreads-1))
       !
 !$OMP PARALLEL DEFAULT(NONE) &
@@ -3670,7 +3675,7 @@ CONTAINS
          DO v_ki = recv_vrow+1, recv_vrow+right_row_nimages-1
             right_displ_vunmerged(v_ki) = right_displ_vunmerged(v_ki-1)
             DO v_ci = LBOUND(right_refs_meta_size, 1), UBOUND(right_refs_meta_size, 1)
-               IF (right_refs_meta_size(v_ci, 1, v_ki-1) .NE. 0) THEN
+               IF (right_refs_meta_size(v_ci, 1, v_ki-1) .NE. 0 .OR. right_col_nimages .EQ. 1) THEN
                   right_displ_vunmerged(v_ki) = right_displ_vunmerged(v_ki)+1
                ENDIF
             ENDDO
@@ -3684,7 +3689,7 @@ CONTAINS
          DO v_ki = recv_vcol+1, recv_vcol+left_col_nimages-1
             left_displ_vunmerged(v_ki) = left_displ_vunmerged(v_ki-1)
             DO v_ri = LBOUND(left_refs_meta_size, 1), UBOUND(left_refs_meta_size, 1)
-               IF (left_refs_meta_size(v_ri, 1, v_ki-1) .NE. 0) THEN
+               IF (left_refs_meta_size(v_ri, 1, v_ki-1) .NE. 0 .OR. left_row_nimages .EQ. 1) THEN
                   left_displ_vunmerged(v_ki) = left_displ_vunmerged(v_ki)+1
                ENDIF
             ENDDO
@@ -4250,12 +4255,6 @@ CONTAINS
          DEALLOCATE (row_blk_sizes2enum, enum2row_blk_sizes)
          DEALLOCATE (col_blk_sizes2enum, enum2col_blk_sizes)
       ENDIF
-      !
-      ! clean-up wins
-      CALL mp_win_unlock_all(buffers_orig%right%data_win)
-      CALL mp_win_unlock_all(buffers_orig%right%meta_win)
-      CALL mp_win_unlock_all(buffers_orig%left%data_win)
-      CALL mp_win_unlock_all(buffers_orig%left%meta_win)
       !
       ! Gather data
       IF (do_scatter .OR. do_diagonal) THEN
@@ -5505,7 +5504,9 @@ CONTAINS
       INTEGER                                            :: idata
 
       IF (buffer%has_rma_win) THEN
+         CALL mp_win_unlock_all(buffer%data_win)
          CALL mp_win_free(buffer%data_win)
+         CALL mp_win_unlock_all(buffer%meta_win)
          CALL mp_win_free(buffer%meta_win)
          buffer%has_rma_win = .FALSE.
          buffer%grp = mp_comm_null
