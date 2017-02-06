@@ -265,7 +265,7 @@ ifneq (,$(ELPAROOT))
   ifneq (0,$(ELPA))
     DFLAGS  += -D__ELPA=$(ELPA)
     ELPAINCDIR = $(dir $(shell ls -1 $(ELPAROOT)/include/*/elpa/elpa_kernel_constants.h | head -n1))
-    ELPAMODDIR = $(ELPAINCDIR)/../modules
+    ELPAMODDIR = $(ELPAINCDIR)../modules
     IFLAGS += -I$(ELPAINCDIR) -I$(ELPAMODDIR)
     LIBS   += $(ELPAROOT)/lib/libelpa.a
     # in case ELPA is built with OpenMP
