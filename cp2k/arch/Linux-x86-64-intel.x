@@ -95,9 +95,9 @@ endif
 
 # consider more accurate FP-model
 FPCMODEL = precise
-FPCMODEL = fast=2
+#FPCMODEL = fast=2
 FPFMODEL = source
-FPFMODEL = fast=2
+#FPFMODEL = fast=2
 
 # FP compiler flags
 FPFLAGS += -complex-limited-range
@@ -120,6 +120,13 @@ OPT2 = $(shell echo $$((2<$(OPT)?2:$(OPT))))
 
 ifeq (0,$(ATTRIBS))
   DFLAGS += -DCP_DISABLE_ATTRIBS
+endif
+
+ifneq (,$(strip $(FPCMODEL)))
+  FPCMODEL := -fp-model $(FPCMODEL)
+endif
+ifneq (,$(strip $(FPFMODEL)))
+  FPFMODEL := -fp-model $(FPFMODEL)
 endif
 
 ifeq (1,$(shell echo $$((2 > $(DBG)))))
@@ -161,9 +168,9 @@ OPTFLAGS  = $(TARGET)
 ifeq (0,$(DBG))
   OPTFLAGS  += -O$(OPT)
   DFLAGS    += -DNDEBUG
-  CXXFLAGS  += -fno-alias -ansi-alias -fp-model $(FPCMODEL) $(FPFLAGS)
-  CFLAGS    += -fno-alias -ansi-alias -fp-model $(FPCMODEL) $(FPFLAGS)
-  FCFLAGS   += -align array64byte     -fp-model $(FPFMODEL) $(FPFLAGS)
+  CXXFLAGS  += -fno-alias -ansi-alias $(FPCMODEL) $(FPFLAGS)
+  CFLAGS    += -fno-alias -ansi-alias $(FPCMODEL) $(FPFLAGS)
+  FCFLAGS   += -align array64byte     $(FPFMODEL) $(FPFLAGS)
   #LDFLAGS   += $(NULL)
 else
   OPTFLAGS += -O0
