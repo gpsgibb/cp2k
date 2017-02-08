@@ -110,7 +110,7 @@ void libxsmm_acc_reconfigure()
     libxsmm_set_gemm_auto_prefetch(LIBXSMM_X86_AVX512_MIC != libxsmm_get_target_archid() ? LIBXSMM_PREFETCH_AL2BL2_VIA_C : LIBXSMM_PREFETCH_BL2_VIA_C);
 # endif
 # if LIBXSMM_VERSION4(1, 6, 2, 4) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
-    //libxsmm_set_dispatch_trylock(1);
+    libxsmm_set_dispatch_trylock(1);
 # endif
   }
 #endif
