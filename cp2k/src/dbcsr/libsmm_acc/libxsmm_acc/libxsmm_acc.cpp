@@ -118,13 +118,14 @@ void libxsmm_acc_reconfigure()
 
 #if defined(__ELPA)
   if (!once) {
-    const char *const env = getenv("CP2K_ELPA");
-    const int elpa = (0 == env || 0 == *env) ? 2/*enable*/ : atoi(env);
+    const char *const env_elpa = getenv("CP2K_ELPA"), *const env_qr = getenv("CP2K_ELPA_QR");
+    const int elpa = (0 == env_elpa || 0 == *env_elpa) ? 2/*enable*/ : atoi(env_elpa);
+    const int qr = (0 == env_qr || 0 == *env_qr) ? 0/*disable*/ : atoi(env_qr);
     if (0 != elpa) {
       const char *const diag_lib = "ELPA";
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_print = LIBXSMM_ACC_FALSE;
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr_unsafe = LIBXSMM_ACC_FALSE;
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr = LIBXSMM_ACC_FALSE;
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_print = (0 <= qr ? LIBXSMM_ACC_FALSE : LIBXSMM_ACC_TRUE);
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr_unsafe = ((1 < qr || -1 > qr) ? LIBXSMM_ACC_TRUE : LIBXSMM_ACC_FALSE);
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr = (0 != qr ? LIBXSMM_ACC_TRUE : LIBXSMM_ACC_FALSE);
       LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
       int k_elpa = 1; // auto
 # if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
