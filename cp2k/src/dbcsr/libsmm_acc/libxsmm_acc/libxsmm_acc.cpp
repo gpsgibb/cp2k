@@ -123,9 +123,9 @@ void libxsmm_acc_reconfigure()
     const int qr = (0 == env_qr || 0 == *env_qr) ? 0/*disable*/ : atoi(env_qr);
     if (0 != elpa) {
       const char *const diag_lib = "ELPA";
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_print = (0 <= qr ? LIBXSMM_ACC_FALSE : LIBXSMM_ACC_TRUE);
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr_unsafe = ((1 < qr || -1 > qr) ? LIBXSMM_ACC_TRUE : LIBXSMM_ACC_FALSE);
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr = (0 != qr ? LIBXSMM_ACC_TRUE : LIBXSMM_ACC_FALSE);
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_print = (0 <= qr ? LIBXSMM_ACC_FALSE : LIBXSMM_ACC_FTRUE);
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr_unsafe = ((1 < qr || -1 > qr) ? LIBXSMM_ACC_FTRUE : LIBXSMM_ACC_FALSE);
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr = (0 != qr ? LIBXSMM_ACC_FTRUE : LIBXSMM_ACC_FALSE);
       LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
       int k_elpa = 1; // auto
 # if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
