@@ -71,8 +71,9 @@ LIBXSMM_ACC_EXTERN void xsmm_acc_abort(const char* filename, int line_number, co
 
 #if defined(CP2K_CONFIG_PREFIX)
 # if defined(__ELPA)
-  LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(const char* diag_lib,
-    LIBXSMM_ACC_FTYPE_LOGICAL* switched, const int* k_elpa, int diag_lib_strlen);
+LIBXSMM_ACC_EXTERN void LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(const char* diag_lib, LIBXSMM_ACC_FTYPE_LOGICAL* switched, const int* k_elpa,
+  const LIBXSMM_ACC_FTYPE_LOGICAL* elpa_qr, const LIBXSMM_ACC_FTYPE_LOGICAL* elpa_print, const LIBXSMM_ACC_FTYPE_LOGICAL* elpa_qr_unsafe,
+  int diag_lib_strlen);
 # endif
 
 void libxsmm_acc_reconfigure()
@@ -121,6 +122,9 @@ void libxsmm_acc_reconfigure()
     const int elpa = (0 == env || 0 == *env) ? 2/*enable*/ : atoi(env);
     if (0 != elpa) {
       const char *const diag_lib = "ELPA";
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_print = LIBXSMM_ACC_FALSE;
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr_unsafe = LIBXSMM_ACC_FALSE;
+      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr = LIBXSMM_ACC_FALSE;
       LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
       int k_elpa = 1; // auto
 # if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
@@ -132,7 +136,9 @@ void libxsmm_acc_reconfigure()
         }
       }
 # endif
-      LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(diag_lib, &switched, &k_elpa, strlen(diag_lib));
+      LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(diag_lib, &switched, &k_elpa,
+        &elpa_qr, &elpa_print, &elpa_qr_unsafe,
+        strlen(diag_lib));
     }
   }
 #endif
@@ -213,8 +219,7 @@ void libxsmm_acc_reconfigure()
   if (env_rma && *env_rma) {
     const int value = atoi(env_rma);
     if (0 != value) {
-      dbcsr_cfg.use_mpi_filtering = LIBXSMM_ACC_FALSE;
-      dbcsr_cfg.use_mpi_exp = LIBXSMM_ACC_FTRUE;
+      dbcsr_cfg.use_mpi_rma = LIBXSMM_ACC_FTRUE;
     }
   }
 #endif

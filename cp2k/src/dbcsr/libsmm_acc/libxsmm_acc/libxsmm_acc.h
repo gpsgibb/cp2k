@@ -160,8 +160,7 @@
     ITYPE KIND num_mult_images DELIM \
     ITYPE KIND nstacks DELIM \
     INTERNAL /* nn_stacks, nk_stacks */ \
-    BTYPE KIND use_mpi_exp DELIM \
-    BTYPE KIND use_mpi_filtering DELIM \
+    BTYPE KIND use_mpi_rma DELIM \
     ITYPE KIND num_layers_3D DELIM \
     BTYPE KIND use_comm_thread DELIM \
     ITYPE KIND comm_thread_load DELIM \
