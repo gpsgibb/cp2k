@@ -531,7 +531,7 @@
 
     INTEGER :: r, c
 !   ---------------------------------------------------------------------------
-#if defined(__LIBXSMM_TRANS)
+#if defined(__LIBXSMM_TRANS) && 0
     IF (CP_VERSION4(1, 7, 1, 408).LE.CP_VERSION4( &
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
@@ -553,7 +553,7 @@
       END DO
     END DO
 #endif
-#if defined(__LIBXSMM_TRANS)
+#if defined(__LIBXSMM_TRANS) && 0
     ENDIF
 #endif
   END SUBROUTINE block_transpose_inplace_${nametype1}$
