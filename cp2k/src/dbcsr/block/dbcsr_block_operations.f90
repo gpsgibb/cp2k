@@ -4,7 +4,7 @@
 !--------------------------------------------------------------------------------------------------!
 
 #:include '../data/dbcsr.fypp'
-#:for n, nametype1, base1, prec1, kind1, type1, dkind1 in inst_params_float
+#:for n, nametype1, base1, prec1, kind1, type1, dkind1, typesize1, one1 in inst_params_all
 ! **************************************************************************************************
 !> \brief Copies a block subset
 !> \param dst ...
@@ -313,8 +313,11 @@
 !> \param[in] rows input matrix size
 !> \param[in] columns input matrix size
 ! **************************************************************************************************
-  PURE SUBROUTINE block_transpose_copy_${nametype1}$(extent_out, extent_in,&
+  CP_MKL_PURE SUBROUTINE block_transpose_copy_${nametype1}$(extent_out, extent_in,&
        rows, columns)
+#if defined(__LIBXSMM_TRANS)
+    USE libxsmm
+#endif
     ${type1}$, DIMENSION(:), INTENT(OUT) :: extent_out
     ${type1}$, DIMENSION(:), INTENT(IN)  :: extent_in
     INTEGER, INTENT(IN)                :: rows, columns
@@ -323,9 +326,24 @@
       routineP = moduleN//':'//routineN
 
 !   ---------------------------------------------------------------------------
-
+#if defined(__LIBXSMM_TRANS)
+    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
+        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
+        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
+    THEN
+        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                            ${typesize1}$, rows, columns, rows, columns)
+    ELSE
+#endif
+#if defined(__MKL)
+    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1}$, extent_in, rows, extent_out, columns)
+#else
     extent_out(1:rows*columns) = RESHAPE(TRANSPOSE(&
          RESHAPE(extent_in(1:rows*columns), (/rows, columns/))), (/rows*columns/))
+#endif
+#if defined(__LIBXSMM_TRANS)
+    ENDIF
+#endif
   END SUBROUTINE block_transpose_copy_${nametype1}$
 
 ! **************************************************************************************************
@@ -399,8 +417,11 @@
 !> \param[in] rows input matrix size
 !> \param[in] columns input matrix size
 ! **************************************************************************************************
-  PURE SUBROUTINE block_transpose_copy_2d1d_${nametype1}$(extent_out, extent_in,&
+  CP_MKL_PURE SUBROUTINE block_transpose_copy_2d1d_${nametype1}$(extent_out, extent_in,&
        rows, columns)
+#if defined(__LIBXSMM_TRANS)
+    USE libxsmm
+#endif
     INTEGER, INTENT(IN)                           :: rows, columns
     ${type1}$, DIMENSION(columns,rows), INTENT(OUT) :: extent_out
     ${type1}$, DIMENSION(:), INTENT(IN)             :: extent_in
@@ -409,8 +430,23 @@
       routineP = moduleN//':'//routineN
 
 !   ---------------------------------------------------------------------------
-
+#if defined(__LIBXSMM_TRANS)
+    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
+        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
+        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
+    THEN
+        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                            ${typesize1}$, rows, columns, rows, columns)
+    ELSE
+#endif
+#if defined(__MKL)
+    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1}$, extent_in, rows, extent_out, columns)
+#else
     extent_out = TRANSPOSE(RESHAPE(extent_in, (/rows, columns/)))
+#endif
+#if defined(__LIBXSMM_TRANS)
+    ENDIF
+#endif
   END SUBROUTINE block_transpose_copy_2d1d_${nametype1}$
 
 ! **************************************************************************************************
@@ -442,8 +478,11 @@
 !> \param[in] rows input matrix size
 !> \param[in] columns input matrix size
 ! **************************************************************************************************
-  PURE SUBROUTINE block_transpose_copy_1d2d_${nametype1}$(extent_out, extent_in,&
+  CP_MKL_PURE SUBROUTINE block_transpose_copy_1d2d_${nametype1}$(extent_out, extent_in,&
        rows, columns)
+#if defined(__LIBXSMM_TRANS)
+    USE libxsmm
+#endif
     ${type1}$, DIMENSION(:), INTENT(OUT)            :: extent_out
     INTEGER, INTENT(IN)                           :: rows, columns
     ${type1}$, DIMENSION(rows,columns), INTENT(IN)  :: extent_in
@@ -452,8 +491,23 @@
       routineP = moduleN//':'//routineN
 
 !   ---------------------------------------------------------------------------
-
+#if defined(__LIBXSMM_TRANS)
+    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
+        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
+        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
+    THEN
+        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                            ${typesize1}$, rows, columns, rows, columns)
+    ELSE
+#endif
+#if defined(__MKL)
+    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1}$, extent_in, rows, extent_out, columns)
+#else
     extent_out = RESHAPE(TRANSPOSE(extent_in), (/rows*columns/))
+#endif
+#if defined(__LIBXSMM_TRANS)
+    ENDIF
+#endif
   END SUBROUTINE block_transpose_copy_1d2d_${nametype1}$
 
 
@@ -463,7 +517,10 @@
 !> \param[in] rows input matrix size
 !> \param[in] columns input matrix size
 ! **************************************************************************************************
-  PURE SUBROUTINE block_transpose_inplace_${nametype1}$(extent, rows, columns)
+  CP_MKL_PURE SUBROUTINE block_transpose_inplace_${nametype1}$(extent, rows, columns)
+#if defined(__LIBXSMM_TRANS)
+    USE libxsmm
+#endif
     INTEGER, INTENT(IN)                      :: rows, columns
     ${type1}$, DIMENSION(rows*columns), &
       INTENT(INOUT)                          :: extent
@@ -474,7 +531,17 @@
 
     INTEGER :: r, c
 !   ---------------------------------------------------------------------------
-
+#if defined(__LIBXSMM_TRANS)
+    IF (CP_VERSION4(1, 7, 1, 408).LE.CP_VERSION4( &
+        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
+        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
+    THEN
+        CALL libxsmm_itrans(C_LOC(extent), ${typesize1}$, rows, columns, rows)
+    ELSE
+#endif
+#if defined(__MKL)
+    CALL mkl_${nametype1}$imatcopy('C', 'T', rows, columns, ${one1}$, extent, rows, columns)
+#else
     DO r = 1 , columns
       DO c = 1 , rows
        extent_tr(r + (c-1)*columns) = extent(c + (r-1)*rows)
@@ -485,6 +552,10 @@
        extent(r + (c-1)*columns) = extent_tr(r + (c-1)*columns)
       END DO
     END DO
+#endif
+#if defined(__LIBXSMM_TRANS)
+    ENDIF
+#endif
   END SUBROUTINE block_transpose_inplace_${nametype1}$
 
 
