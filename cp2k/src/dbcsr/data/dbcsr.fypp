@@ -29,11 +29,10 @@
 #:set type_int1 = ['INTEGER(kind=int_4)', 'INTEGER(kind=int_8)']
 #:set zero_int1 = ['0', '0']
 
-#:set nametype_all1 = nametype1 + typesize1 + nametype_int1
+#:set nametype_all1 = nametype1 + nametype_int1
 #:set type_all1 = type1 + type_int1
 #:set zero_all1 = zero1 + zero_int1
-#:set value_all1 = zero_all1 + one1
 
-#:set inst_params_float = list(zip(n_inst, nametype1, typesize1, base1, prec1, kind1, type1, dkind1))
-#:set inst_params_all = list(zip(nametype_all1, type_all1, value_all1))
+#:set inst_params_float = list(zip(n_inst, nametype1, base1, prec1, kind1, type1, dkind1))
+#:set inst_params_all = list(zip(nametype_all1, type_all1, zero_all1))
 #:endmute

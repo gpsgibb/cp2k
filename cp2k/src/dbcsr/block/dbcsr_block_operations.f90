@@ -4,7 +4,7 @@
 !--------------------------------------------------------------------------------------------------!
 
 #:include '../data/dbcsr.fypp'
-#:for n, nametype1, base1, prec1, kind1, type1, dkind1, typesize1, one1 in inst_params_all
+#:for n, nametype1, base1, prec1, kind1, type1, dkind1 in inst_params_float
 ! **************************************************************************************************
 !> \brief Copies a block subset
 !> \param dst ...
@@ -332,11 +332,11 @@
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
         CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            ${typesize1}$, rows, columns, rows, columns)
+                            ${typesize1[n]}$, rows, columns, rows, columns)
     ELSE
 #endif
 #if defined(__MKL)
-    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1}$, extent_in, rows, extent_out, columns)
+    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1[n]}$, extent_in, rows, extent_out, columns)
 #else
     extent_out(1:rows*columns) = RESHAPE(TRANSPOSE(&
          RESHAPE(extent_in(1:rows*columns), (/rows, columns/))), (/rows*columns/))
@@ -436,11 +436,11 @@
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
         CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            ${typesize1}$, rows, columns, rows, columns)
+                            ${typesize1[n]}$, rows, columns, rows, columns)
     ELSE
 #endif
 #if defined(__MKL)
-    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1}$, extent_in, rows, extent_out, columns)
+    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1[n]}$, extent_in, rows, extent_out, columns)
 #else
     extent_out = TRANSPOSE(RESHAPE(extent_in, (/rows, columns/)))
 #endif
@@ -497,11 +497,11 @@
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
         CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            ${typesize1}$, rows, columns, rows, columns)
+                            ${typesize1[n]}$, rows, columns, rows, columns)
     ELSE
 #endif
 #if defined(__MKL)
-    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1}$, extent_in, rows, extent_out, columns)
+    CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1[n]}$, extent_in, rows, extent_out, columns)
 #else
     extent_out = RESHAPE(TRANSPOSE(extent_in), (/rows*columns/))
 #endif
@@ -536,11 +536,11 @@
         LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
     THEN
-        CALL libxsmm_itrans(C_LOC(extent), ${typesize1}$, rows, columns, rows)
+        CALL libxsmm_itrans(C_LOC(extent), ${typesize1[n]}$, rows, columns, rows)
     ELSE
 #endif
 #if defined(__MKL)
-    CALL mkl_${nametype1}$imatcopy('C', 'T', rows, columns, ${one1}$, extent, rows, columns)
+    CALL mkl_${nametype1}$imatcopy('C', 'T', rows, columns, ${one1[n]}$, extent, rows, columns)
 #else
     DO r = 1 , columns
       DO c = 1 , rows
