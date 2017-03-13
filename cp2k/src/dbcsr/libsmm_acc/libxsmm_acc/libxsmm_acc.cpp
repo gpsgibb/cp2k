@@ -164,38 +164,53 @@ void libxsmm_acc_reconfigure()
 #endif
   }
 
-  const char *const env_commtload = getenv("CP2K_COMMTLOAD");
-  if (env_commtload && *env_commtload) {
-    const int value = atoi(env_commtload);
-    if (0 != value) {
-      if (0 < value) {
-        dbcsr_cfg.comm_thread_load = value;
-      }
-#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD)
-      else {
-# if (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
-        dbcsr_cfg.comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
-# else
-        dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
-# endif
-      }
-#endif
-      dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FTRUE;
-    }
-    else {
-      dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
-    }
+  int rma = 0;
+#if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
+  const char *const env_rma = getenv("CP2K_RMA");
+  if (env_rma && *env_rma) {
+    rma = atoi(env_rma);
   }
-#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD) && 0/*disabled*/
-  else {
-# if (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
-    dbcsr_cfg.comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
-    dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FTRUE;
-# else
+  if (0 != rma) {
+    dbcsr_cfg.use_mpi_rma = LIBXSMM_ACC_FTRUE;
     dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
-# endif
+    dbcsr_cfg.comm_thread_load = 100;
   }
+  else
 #endif
+  {
+    const char *const env_commtload = getenv("CP2K_COMMTLOAD");
+    if (env_commtload && *env_commtload) {
+      const int value = atoi(env_commtload);
+      if (0 != value) {
+        if (0 < value) {
+          dbcsr_cfg.comm_thread_load = value;
+        }
+#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD)
+        else {
+# if (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
+          dbcsr_cfg.comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
+# else
+          dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
+# endif
+        }
+#endif
+        dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FTRUE;
+      }
+      else {
+        dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
+      }
+    }
+#if defined(LIBXSMM_ACC_COMM_THREAD_LOAD) && 0/*disabled*/
+    else {
+# if (0 < LIBXSMM_ACC_COMM_THREAD_LOAD)
+      dbcsr_cfg.comm_thread_load = LIBXSMM_ACC_COMM_THREAD_LOAD;
+      dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FTRUE;
+# else
+      dbcsr_cfg.use_comm_thread = LIBXSMM_ACC_FALSE;
+# endif
+    }
+#endif
+  }
 
   const char *const env_multrec = getenv("CP2K_MULTREC");
   if (env_multrec && *env_multrec) {
@@ -212,16 +227,6 @@ void libxsmm_acc_reconfigure()
 #if defined(LIBXSMM_ACC_MULTREC_LIMIT) && (0 < LIBXSMM_ACC_MULTREC_LIMIT) && 0/*disabled*/
   else {
     dbcsr_cfg.multrec_limit = LIBXSMM_ACC_MULTREC_LIMIT;
-  }
-#endif
-
-#if defined(__MPI_VERSION) && (3 <= __MPI_VERSION)
-  const char *const env_rma = getenv("CP2K_RMA");
-  if (env_rma && *env_rma) {
-    const int value = atoi(env_rma);
-    if (0 != value) {
-      dbcsr_cfg.use_mpi_rma = LIBXSMM_ACC_FTRUE;
-    }
   }
 #endif
 
