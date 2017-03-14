@@ -297,7 +297,7 @@
     ${type1}$, DIMENSION(*), INTENT(OUT)  :: extent_out
     ${type1}$, DIMENSION(*), INTENT(IN)   :: extent_in
 
-    CHARACTER(len=*), PARAMETER :: routineN = 'block_transpose_d', &
+    CHARACTER(len=*), PARAMETER :: routineN = 'block_copy_${nametype1}$', &
       routineP = moduleN//':'//routineN
 
 !   ---------------------------------------------------------------------------
@@ -359,7 +359,7 @@
     ${type1}$, DIMENSION(rows,columns), INTENT(OUT) :: extent_out
     ${type1}$, DIMENSION(:), INTENT(IN)             :: extent_in
 
-    CHARACTER(len=*), PARAMETER :: routineN = 'block_transpose_copy_2d1d_${nametype1}$', &
+    CHARACTER(len=*), PARAMETER :: routineN = 'block_copy_2d1d_${nametype1}$', &
       routineP = moduleN//':'//routineN
 
 !   ---------------------------------------------------------------------------
@@ -380,7 +380,7 @@
     ${type1}$, DIMENSION(rows*columns), INTENT(OUT) :: extent_out
     ${type1}$, DIMENSION(rows*columns), INTENT(IN)  :: extent_in
 
-    CHARACTER(len=*), PARAMETER :: routineN = 'block_transpose_copy_1d1d_${nametype1}$', &
+    CHARACTER(len=*), PARAMETER :: routineN = 'block_copy_1d1d_${nametype1}$', &
       routineP = moduleN//':'//routineN
 
 !   ---------------------------------------------------------------------------
@@ -401,7 +401,7 @@
     ${type1}$, DIMENSION(rows,columns), INTENT(OUT) :: extent_out
     ${type1}$, DIMENSION(rows,columns), INTENT(IN)  :: extent_in
 
-    CHARACTER(len=*), PARAMETER :: routineN = 'block_transpose_copy_2d2d_${nametype1}$', &
+    CHARACTER(len=*), PARAMETER :: routineN = 'block_copy_2d2d_${nametype1}$', &
       routineP = moduleN//':'//routineN
 
 !   ---------------------------------------------------------------------------
@@ -570,7 +570,7 @@
 !> \param[in] src        source data array
 !> \param[in] source_lb  (optional) lower bound of source
 ! **************************************************************************************************
-  SUBROUTINE dbcsr_data_set_a${nametype1}$ (dst, lb, data_size, src, source_lb)
+  SUBROUTINE dbcsr_data_set_a${nametype1}$(dst, lb, data_size, src, source_lb)
     TYPE(dbcsr_data_obj), INTENT(INOUT)      :: dst
     INTEGER, INTENT(IN)                      :: lb, data_size
     ${type1}$, DIMENSION(:), INTENT(IN)        :: src
