@@ -400,7 +400,7 @@ $: "#endif"
       ELSE
          success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, &
                                          comm_row, comm_col, group, &
-                                         THIS_REAL_ELPA_KERNEL_API=elpa_kernel, &
+                                         elpa_kernel, &
                                          useQR=use_qr)  
       END IF
 
@@ -418,12 +418,12 @@ $: "#endif"
       ELSE
          success = solve_evp_real_2stage(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
                                          comm_row, comm_col, group, &
-                                         THIS_REAL_ELPA_KERNEL_API=elpa_kernel, &
+                                         elpa_kernel, &
                                          useQR=use_qr)
          IF (check_eigenvalues) THEN
             success_noqr = solve_evp_real_2stage(n, neig, m_noqr, n_rows, eval_noqr, v_noqr, n_rows, nblk, n_cols, &
                                                  comm_row, comm_col, group, &
-                                                 THIS_REAL_ELPA_KERNEL_API=elpa_kernel, &
+                                                 elpa_kernel, &
                                                  useQR=.FALSE.)
          END IF         
       END IF
@@ -442,12 +442,12 @@ $: "#endif"
       ELSE
          success = elpa_solve_evp_real_2stage_double(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
                                                      comm_row, comm_col, group, &
-                                                     THIS_REAL_ELPA_KERNEL_API=elpa_kernel, &
+                                                     elpa_kernel, &
                                                      useQR=use_qr)
          IF (check_eigenvalues) THEN
             success_noqr = elpa_solve_evp_real_2stage_double(n, neig, m_noqr, n_rows, eval_noqr, v_noqr, n_rows, nblk, n_cols, &
                                                              comm_row, comm_col, group, &
-                                                             THIS_REAL_ELPA_KERNEL_API=elpa_kernel, &
+                                                             elpa_kernel, &
                                                              useQR=.FALSE.)
          END IF         
       END IF
