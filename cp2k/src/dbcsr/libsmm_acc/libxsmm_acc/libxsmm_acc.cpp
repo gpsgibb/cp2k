@@ -132,7 +132,8 @@ void libxsmm_acc_reconfigure()
       if (0 < elpa) {
         const int cpuid = LIBXSMM_MIN(libxsmm_cpuid(), LIBXSMM_X86_AVX512);
         if (LIBXSMM_X86_SSE3 <= cpuid) {
-          const int k_elpa_base[] = { 7, 7, 10, 13, 16 }, block = LIBXSMM_MIN(elpa - 1, 2/*block6*/);
+          const int k_elpa_base[] = { 6/*SSE3*/, 6/*SSE4*/, 9/*AVX*/, 12/*AVX2*/, 15/*AVX512*/ };
+          const int block = LIBXSMM_MIN(elpa - 1, 2/*block6*/);
           k_elpa = k_elpa_base[cpuid-(LIBXSMM_X86_SSE3)] + block;
         }
       }
