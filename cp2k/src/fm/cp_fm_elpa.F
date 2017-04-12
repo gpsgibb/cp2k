@@ -138,7 +138,7 @@ $: "   elpa_kernel = ELPA2_REAL_KERNEL_"+kernel_const
 $: "#elif defined(ELPA_2STAGE_REAL_"+kernel_const+")"
 $: "   elpa_kernel = ELPA_2STAGE_REAL_"+kernel_const
 $: "#else"
-$: "   CPABORT('"+kernel_const+" not available')"
+$: "   CPABORT('ELPA "+kernel_const+" kernel not available')"
 $: "#endif"
 #:enddef
 
