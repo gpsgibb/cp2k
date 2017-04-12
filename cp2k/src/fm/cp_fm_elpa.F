@@ -133,8 +133,10 @@ CONTAINS
 
 #:def pick_macro(kernel_const)
 #! use Fypp's eval directive to hide ELPA flags from convention checker
-$: "#if defined("+kernel_const+")"
-$: "   elpa_kernel = "+kernel_const
+$: "#if defined(ELPA2_REAL_KERNEL_"+kernel_const+")"
+$: "   elpa_kernel = ELPA2_REAL_KERNEL_"+kernel_const
+$: "#elif defined(ELPA_2STAGE_REAL_"+kernel_const+")"
+$: "   elpa_kernel = ELPA_2STAGE_REAL_"+kernel_const
 $: "#else"
 $: "   CPABORT('"+kernel_const+" not available')"
 $: "#endif"
@@ -144,41 +146,41 @@ $: "#endif"
         CASE(1)
           elpa_kernel = -1 ! auto
         CASE(2)
-@:        pick_macro(ELPA2_REAL_KERNEL_GENERIC)
+@:        pick_macro(GENERIC)
         CASE(3)
-@:        pick_macro(ELPA2_REAL_KERNEL_GENERIC_SIMPLE)
+@:        pick_macro(GENERIC_SIMPLE)
         CASE(4)
-@:        pick_macro(ELPA2_REAL_KERNEL_BGP)
+@:        pick_macro(BGP)
         CASE(5)
-@:        pick_macro(ELPA2_REAL_KERNEL_BGQ)
+@:        pick_macro(BGQ)
         CASE(6)
-@:        pick_macro(ELPA2_REAL_KERNEL_SSE)
+@:        pick_macro(SSE)
         CASE(7)
-@:        pick_macro(ELPA2_REAL_KERNEL_SSE_BLOCK2)
+@:        pick_macro(SSE_BLOCK2)
         CASE(8)
-@:        pick_macro(ELPA2_REAL_KERNEL_SSE_BLOCK4)
+@:        pick_macro(SSE_BLOCK4)
         CASE(9)
-@:        pick_macro(ELPA2_REAL_KERNEL_SSE_BLOCK6)
+@:        pick_macro(SSE_BLOCK6)
         CASE(10)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX_BLOCK2)
+@:        pick_macro(AVX_BLOCK2)
         CASE(11)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX_BLOCK4)
+@:        pick_macro(AVX_BLOCK4)
         CASE(12)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX_BLOCK6)
+@:        pick_macro(AVX_BLOCK6)
         CASE(13)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX2_BLOCK2)
+@:        pick_macro(AVX2_BLOCK2)
         CASE(14)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX2_BLOCK4)
+@:        pick_macro(AVX2_BLOCK4)
         CASE(15)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX2_BLOCK6)
+@:        pick_macro(AVX2_BLOCK6)
         CASE(16)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX512_BLOCK2)
+@:        pick_macro(AVX512_BLOCK2)
         CASE(17)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX512_BLOCK4)
+@:        pick_macro(AVX512_BLOCK4)
         CASE(18)
-@:        pick_macro(ELPA2_REAL_KERNEL_AVX512_BLOCK6)
+@:        pick_macro(AVX512_BLOCK6)
         CASE(19)
-@:        pick_macro(ELPA2_REAL_KERNEL_GPU)
+@:        pick_macro(GPU)
         CASE DEFAULT
           CPABORT("Invalid ELPA kernel selected")
      END SELECT
