@@ -119,7 +119,7 @@ void libxsmm_acc_reconfigure()
 #if defined(__ELPA)
   if (!once) {
     const char *const env_elpa = getenv("CP2K_ELPA"), *const env_qr = getenv("CP2K_ELPA_QR");
-    const int elpa = (0 == env_elpa || 0 == *env_elpa) ? 2/*enable*/ : atoi(env_elpa);
+    const int elpa = (0 == env_elpa || 0 == *env_elpa) ? 3/*block6*/ : atoi(env_elpa);
     const int qr = (0 == env_qr || 0 == *env_qr) ? 0/*disable*/ : atoi(env_qr);
     if (0 != elpa) {
       const char *const diag_lib = "ELPA";
