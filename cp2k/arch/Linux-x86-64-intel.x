@@ -602,8 +602,8 @@ mp2_optimize_ri_basis.o: mp2_optimize_ri_basis.F
 qs_dispersion_nonloc.o: qs_dispersion_nonloc.F
 	$(FC) -c $(FCFLAGS) -O$(OPT1) $<
 ifneq (0,$(OMP))
-fast.o: fast.F
-	$(FC) -c $(filter-out -openmp -qopenmp,$(FCFLAGS)) $<
+minimax_exp_k53.o: minimax_exp_k53.F
+	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) $<
 endif
 endif
 
@@ -618,8 +618,14 @@ cube_utils.o: cube_utils.F
 bibliography.o: bibliography.F
 	$(FC) -c $(FCFLAGS) -O$(OPT2) $<
 ifneq (0,$(OMP))
+fast.o: fast.F
+	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) $<
 xc_tpss.o: xc_tpss.F
-	$(FC) -c $(filter-out -openmp -qopenmp,$(FCFLAGS)) $<
+	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) $<
+qs_integrate_potential_product.o: qs_integrate_potential_product.F
+	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) $<
+dbcsr_work_operations.o: dbcsr_work_operations.F
+	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) $<
 realspace_grid_types.o: realspace_grid_types.F
 	$(FC) -c $(filter-out -heap-arrays,$(FCFLAGS)) $<
 matrix_exp.o: matrix_exp.F
@@ -628,10 +634,6 @@ cp_dbcsr_operations.o: cp_dbcsr_operations.F
 	$(FC) -c $(filter-out -heap-arrays,$(FCFLAGS)) $<
 dbcsr_util.o: dbcsr_util.F
 	$(FC) -c $(filter-out -heap-arrays,$(FCFLAGS)) $<
-qs_integrate_potential_product.o: qs_integrate_potential_product.F
-	$(FC) -c $(FCFLAGS) -qno-openmp $<
-dbcsr_work_operations.o: dbcsr_work_operations.F
-	$(FC) -c $(FCFLAGS) -qno-openmp $<
 endif
 endif
 
