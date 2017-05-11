@@ -601,6 +601,9 @@ mp2_optimize_ri_basis.o: mp2_optimize_ri_basis.F
 qs_dispersion_nonloc.o: qs_dispersion_nonloc.F
 	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
 	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
+helium_sampling.o: helium_sampling.F
+	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 ifneq (0,$(OMP))
 minimax_exp_k53.o: minimax_exp_k53.F
 	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
