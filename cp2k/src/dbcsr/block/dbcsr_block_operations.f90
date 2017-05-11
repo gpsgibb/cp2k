@@ -327,22 +327,13 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM_TRANS)
-    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
-        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
-        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
-    THEN
-        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            ${typesize1[n]}$, rows, columns, rows, columns)
-    ELSE
-#endif
-#if defined(__MKL)
+    CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                        ${typesize1[n]}$, rows, columns, rows, columns)
+#elif defined(__MKL)
     CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1[n]}$, extent_in, rows, extent_out, columns)
 #else
     extent_out(1:rows*columns) = RESHAPE(TRANSPOSE(&
          RESHAPE(extent_in(1:rows*columns), (/rows, columns/))), (/rows*columns/))
-#endif
-#if defined(__LIBXSMM_TRANS)
-    ENDIF
 #endif
   END SUBROUTINE block_transpose_copy_${nametype1}$
 
@@ -431,21 +422,12 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM_TRANS)
-    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
-        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
-        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
-    THEN
-        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            ${typesize1[n]}$, rows, columns, rows, columns)
-    ELSE
-#endif
-#if defined(__MKL)
+    CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                        ${typesize1[n]}$, rows, columns, rows, columns)
+#elif defined(__MKL)
     CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1[n]}$, extent_in, rows, extent_out, columns)
 #else
     extent_out = TRANSPOSE(RESHAPE(extent_in, (/rows, columns/)))
-#endif
-#if defined(__LIBXSMM_TRANS)
-    ENDIF
 #endif
   END SUBROUTINE block_transpose_copy_2d1d_${nametype1}$
 
@@ -492,21 +474,12 @@
 
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM_TRANS)
-    IF (CP_VERSION4(1, 4, 4, 52).LE.CP_VERSION4( &
-        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
-        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
-    THEN
-        CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
-                            ${typesize1[n]}$, rows, columns, rows, columns)
-    ELSE
-#endif
-#if defined(__MKL)
+    CALL libxsmm_otrans(C_LOC(extent_out), C_LOC(extent_in), &
+                        ${typesize1[n]}$, rows, columns, rows, columns)
+#elif defined(__MKL)
     CALL mkl_${nametype1}$omatcopy('C', 'T', rows, columns, ${one1[n]}$, extent_in, rows, extent_out, columns)
 #else
     extent_out = RESHAPE(TRANSPOSE(extent_in), (/rows*columns/))
-#endif
-#if defined(__LIBXSMM_TRANS)
-    ENDIF
 #endif
   END SUBROUTINE block_transpose_copy_1d2d_${nametype1}$
 
@@ -532,14 +505,8 @@
     INTEGER :: r, c
 !   ---------------------------------------------------------------------------
 #if defined(__LIBXSMM_TRANS) && 0
-    IF (CP_VERSION4(1, 7, 1, 408).LE.CP_VERSION4( &
-        LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
-        LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
-    THEN
-        CALL libxsmm_itrans(C_LOC(extent), ${typesize1[n]}$, rows, columns, rows)
-    ELSE
-#endif
-#if defined(__MKL)
+    CALL libxsmm_itrans(C_LOC(extent), ${typesize1[n]}$, rows, columns, rows)
+#elif defined(__MKL)
     CALL mkl_${nametype1}$imatcopy('C', 'T', rows, columns, ${one1[n]}$, extent, rows, columns)
 #else
     DO r = 1 , columns
@@ -552,9 +519,6 @@
        extent(r + (c-1)*columns) = extent_tr(r + (c-1)*columns)
       END DO
     END DO
-#endif
-#if defined(__LIBXSMM_TRANS) && 0
-    ENDIF
 #endif
   END SUBROUTINE block_transpose_inplace_${nametype1}$
 

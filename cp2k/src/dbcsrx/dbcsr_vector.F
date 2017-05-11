@@ -462,18 +462,11 @@ SUBROUTINE create_row_vec_from_matrix(dbcsr_vec, matrix, nrow)
        IF(fast_vec_col%blk_map_${nametype}$(prow)%assigned_thread .NE. ithread ) CYCLE
        pcol=hash_table_get(fast_vec_row%hash_table,col)
 #if defined(__LIBXSMM) && ${xsmm}$
-       IF (CP_VERSION4(1, 4, 1, 20).LE.CP_VERSION4( &
-          LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
-          LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
-       THEN
-          CALL libxsmm_matmul(fast_vec_col%blk_map_${nametype}$(prow)%ptr, data_d, &
-                              fast_vec_row%blk_map_${nametype}$(pcol)%ptr, transb='T')
-       ELSE
-#endif
+       CALL libxsmm_matmul(fast_vec_col%blk_map_${nametype}$(prow)%ptr, data_d, &
+                           fast_vec_row%blk_map_${nametype}$(pcol)%ptr, transb='T')
+#else
        fast_vec_col%blk_map_${nametype}$(prow)%ptr=fast_vec_col%blk_map_${nametype}$(prow)%ptr+&
             MATMUL(data_d,TRANSPOSE(fast_vec_row%blk_map_${nametype}$(pcol)%ptr))
-#if defined(__LIBXSMM) && ${xsmm}$
-       END IF
 #endif
     END DO
     CALL dbcsr_iterator_stop(iter)
@@ -936,19 +929,12 @@ SUBROUTINE create_row_vec_from_matrix(dbcsr_vec, matrix, nrow)
           rpcol=hash_table_get(res_fast_vec_row%hash_table,col)
           IF(res_fast_vec_row%blk_map_${nametype}$(rpcol)%assigned_thread .EQ. ithread .AND. row .NE. col) THEN
 #if defined(__LIBXSMM) && ${xsmm}$
-             IF (CP_VERSION4(1, 4, 1, 20).LE.CP_VERSION4( &
-                LIBXSMM_VERSION_MAJOR,  LIBXSMM_VERSION_MINOR, &
-                LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)) &
-             THEN
-                CALL libxsmm_matmul(res_fast_vec_row%blk_map_${nametype}$(rpcol)%ptr, &
-                                    fast_vec_col%blk_map_${nametype}$(prow)%ptr, &
-                                    data_d, transa='T')
-             ELSE
-#endif
+             CALL libxsmm_matmul(res_fast_vec_row%blk_map_${nametype}$(rpcol)%ptr, &
+                                 fast_vec_col%blk_map_${nametype}$(prow)%ptr, &
+                                 data_d, transa='T')
+#else
              res_fast_vec_row%blk_map_${nametype}$(rpcol)%ptr=res_fast_vec_row%blk_map_${nametype}$(rpcol)%ptr+&
                 MATMUL(TRANSPOSE(fast_vec_col%blk_map_${nametype}$(prow)%ptr),data_d)
-#if defined(__LIBXSMM) && ${xsmm}$
-            END IF
 #endif
           END IF
        ELSE
