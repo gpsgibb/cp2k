@@ -451,7 +451,6 @@ ifeq (1,$(MKL_DIRECT))
   DFLAGS += -DMKL_DIRECT_CALL_SEQ
 endif
 
-MKLROOT_CORE ?= $(MKLROOT)
 ifneq (1,$(MKL))
   ifneq (0,$(MKL)) # smp
     DFLAGS  += -D__MKL -D__FFTW3
@@ -471,7 +470,7 @@ ifneq (1,$(MKL))
           --start-group \
             $(MKLROOT)/lib/mic/libmkl_scalapack_lp64.a \
             $(MKLROOT)/lib/mic/libmkl_intel_lp64.a \
-            $(MKLROOT_CORE)/lib/mic/libmkl_core.a \
+            $(MKLROOT)/lib/mic/libmkl_core.a \
             $(MKLROOT)/lib/mic/libmkl_intel_thread.a \
             $(MKLROOT)/lib/mic/libmkl_blacs_intelmpi_lp64.a \
           --end-group"
@@ -479,7 +478,7 @@ ifneq (1,$(MKL))
           -Wl,--start-group \
             $(SCALAPACKDIR)/lib$(SCALAPACKLIB).a \
             $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a \
-            $(MKLROOT_CORE)/lib/intel64/libmkl_core.a \
+            $(MKLROOT)/lib/intel64/libmkl_core.a \
             $(MKLROOT)/lib/intel64/libmkl_intel_thread.a \
             $(MKLROOT)/lib/intel64/libmkl_blacs_intelmpi_lp64.a \
           -Wl,--end-group
@@ -487,13 +486,13 @@ ifneq (1,$(MKL))
         MIC_LDFLAGS += -qoffload-option,mic,ld," \
           --start-group \
             $(MKLROOT)/lib/mic/libmkl_intel_lp64.a \
-            $(MKLROOT_CORE)/lib/mic/libmkl_core.a \
+            $(MKLROOT)/lib/mic/libmkl_core.a \
             $(MKLROOT)/lib/mic/libmkl_intel_thread.a \
           --end-group"
         LIBS += \
           -Wl,--start-group \
             $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a \
-            $(MKLROOT_CORE)/lib/intel64/libmkl_core.a \
+            $(MKLROOT)/lib/intel64/libmkl_core.a \
             $(MKLROOT)/lib/intel64/libmkl_intel_thread.a \
           -Wl,--end-group
       endif
@@ -523,7 +522,7 @@ else # sequential
         --start-group \
           $(MKLROOT)/lib/mic/libmkl_scalapack_lp64.a \
           $(MKLROOT)/lib/mic/libmkl_intel_lp64.a \
-          $(MKLROOT_CORE)/lib/mic/libmkl_core.a \
+          $(MKLROOT)/lib/mic/libmkl_core.a \
           $(MKLROOT)/lib/mic/libmkl_sequential.a \
           $(MKLROOT)/lib/mic/libmkl_blacs_intelmpi_lp64.a \
         --end-group"
@@ -531,7 +530,7 @@ else # sequential
         -Wl,--start-group \
           $(SCALAPACKDIR)/lib$(SCALAPACKLIB).a \
           $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a \
-          $(MKLROOT_CORE)/lib/intel64/libmkl_core.a \
+          $(MKLROOT)/lib/intel64/libmkl_core.a \
           $(MKLROOT)/lib/intel64/libmkl_sequential.a \
           $(MKLROOT)/lib/intel64/libmkl_blacs_intelmpi_lp64.a \
         -Wl,--end-group
@@ -539,13 +538,13 @@ else # sequential
       MIC_LDFLAGS += -qoffload-option,mic,ld," \
         --start-group \
           $(MKLROOT)/lib/mic/libmkl_intel_lp64.a \
-          $(MKLROOT_CORE)/lib/mic/libmkl_core.a \
+          $(MKLROOT)/lib/mic/libmkl_core.a \
           $(MKLROOT)/lib/mic/libmkl_sequential.a \
         --end-group"
       MKL_LIBS = \
         -Wl,--start-group \
           $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a \
-          $(MKLROOT_CORE)/lib/intel64/libmkl_core.a \
+          $(MKLROOT)/lib/intel64/libmkl_core.a \
           $(MKLROOT)/lib/intel64/libmkl_sequential.a \
         -Wl,--end-group
     endif
