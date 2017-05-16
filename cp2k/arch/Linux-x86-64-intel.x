@@ -383,7 +383,7 @@ $(LIBXSMM_LIB): .state
 		OUTDIR=$(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib \
 		JIT=$(JIT) MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
 		PTHREAD=$(OMP) OPT=$(OPT) IPO=$(IPO) TARGET=$(TARGET) SSE=$(SSE) AVX=$(AVX) MIC=$(MIC) \
-		MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD) SYM=$(SYM) DBG=$(DBG) WRAP=$(WRAP) INIT=0 BIG=0
+		MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD) SYM=$(SYM) DBG=$(DBG) WRAP=$(WRAP) INIT=0
 LIBXSMM_UPTODATE_CHECK := $(shell touch .state)
 # translation unit (dummy) which allows to consider LIBXSMM_LIB as dep. in general
 # below hack is not triggering minimal rebuild but "good enough" (relink)
