@@ -3799,7 +3799,7 @@ CONTAINS
 
       END DO
 
-      z_reflection = sum_z/REAL(natom)
+      z_reflection = sum_z/REAL(natom, KIND=dp)
 
       sum_z = 0.0_dp
 
@@ -3811,7 +3811,7 @@ CONTAINS
 
       END DO
 
-      avg_z_dist = sum_z/REAL(natom)
+      avg_z_dist = sum_z/REAL(natom, KIND=dp)
 
       min_z_dist = avg_z_dist
 
@@ -4009,6 +4009,21 @@ CONTAINS
          END DO
 
       END DO
+
+      DO imepos = 0, para_env%num_pe-1
+         DEALLOCATE (buffer_rec(imepos)%msg)
+         DEALLOCATE (buffer_rec(imepos)%indx)
+         DEALLOCATE (buffer_send(imepos)%msg)
+         DEALLOCATE (buffer_send(imepos)%indx)
+      END DO
+
+      DEALLOCATE (buffer_rec, buffer_send)
+      DEALLOCATE (block_counter, entry_counter)
+      DEALLOCATE (sizes_rec, sizes_send)
+      DEALLOCATE (num_entries_rec)
+      DEALLOCATE (num_blocks_rec)
+      DEALLOCATE (num_entries_send)
+      DEALLOCATE (num_blocks_send)
 
       CALL timestop(handle)
 
