@@ -112,7 +112,6 @@ public:
   }
 
   void zero_c(T *LIBXSMM_ACC_RESTRICT c, U size) const {
-    LIBXSMM_ACC_ASSUME_ALIGNED(c, LIBXSMM_ACC_ALIGNED_STORES);
     LIBXSMM_ACC_PRAGMA_LOOP_COUNT(1, LIBXSMM_ACC_LOOP_MAX_M*LIBXSMM_ACC_LOOP_MAX_N, LIBXSMM_ACC_LOOP_AVG_M*LIBXSMM_ACC_LOOP_AVG_N)
     for (U i = 0; i < size; ++i) c[i] = 0;
   }
@@ -126,7 +125,6 @@ public:
 # endif
 #endif
     {
-      LIBXSMM_ACC_ASSUME_ALIGNED(c, LIBXSMM_ACC_ALIGNED_STORES);
       for (U j = 0; j < n; ++j) {
         LIBXSMM_ACC_PRAGMA_LOOP_COUNT(1, LIBXSMM_ACC_LOOP_MAX_M, LIBXSMM_ACC_LOOP_AVG_M)
         for (U i = 0; i < m; ++i) {
@@ -238,9 +236,8 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
     s += N)
 #endif
   {
-#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL))) || (1 < (LIBXSMM_ACC_ALIGNED_STORES))
-    T buffer[LIBXSMM_ACC_MAX_RESULT_SIZE];
-    T *const tmp = LIBXSMM_ACC_ALIGN_LDST(buffer);
+#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
+    T tmp[LIBXSMM_ACC_MAX_RESULT_SIZE];
 #endif
     U current[LIBXSMM_ACC_PARAM_COUNT], next[LIBXSMM_ACC_PARAM_COUNT];
     U *pcur = current, *pnxt = next, i = s;
@@ -250,9 +247,9 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
     do
 #endif
     {
-      const U ldc = LIBXSMM_ACC_ALIGN_VALUE(pcur[LIBXSMM_ACC_PARAM_M], sizeof(T), LIBXSMM_ACC_ALIGNED_STORES);
+      const U ldc = pcur[LIBXSMM_ACC_PARAM_M];
       T *const ci = c + pcur[LIBXSMM_ACC_PARAM_C] - 1;
-#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL))) || (1 < (LIBXSMM_ACC_ALIGNED_STORES))
+#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
       smm.zero_c(tmp, ldc * pcur[LIBXSMM_ACC_PARAM_N]);
 #else
       T *const tmp = ci;
@@ -263,7 +260,6 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
       {
         i += N; // next
         if (i < nstacksize) {
-          LIBXSMM_ACC_ASSUME_ALIGNED(pnxt, LIBXSMM_ACC_ALIGNMENT);
           for (U j = 0; j < LIBXSMM_ACC_PARAM_COUNT; ++j) pnxt[j] = stack[i+j];
 #if defined(__LIBXSMM) && (0 != LIBXSMM_PREFETCH || 0 != LIBXSMM_JIT)
           smm(pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], pcur[LIBXSMM_ACC_PARAM_K], ldc,
@@ -290,7 +286,7 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
 #endif
         }
       }
-#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL))) || (1 < (LIBXSMM_ACC_ALIGNED_STORES))
+#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
       smm.copy_c(tmp, ci, pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], ldc);
 #endif
       std::swap(pcur, pnxt);
