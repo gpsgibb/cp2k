@@ -18,7 +18,7 @@ MODULE qmmm_init
    USE cell_types,                      ONLY: cell_type,&
                                               use_perd_xyz
    USE cp_control_types,                ONLY: dft_control_type
-   USE cp_eri_mme_types,                ONLY: cp_eri_mme_init_read_input,&
+   USE cp_eri_mme_interface,            ONLY: cp_eri_mme_init_read_input,&
                                               cp_eri_mme_set_params
    USE cp_log_handling,                 ONLY: cp_get_default_logger,&
                                               cp_logger_type
@@ -843,6 +843,7 @@ CONTAINS
                                        hmat=qm_cell_small%hmat, is_ortho=qm_cell_small%orthorhombic, &
                                        zet_err_minimax=qmmm_env%image_charge_pot%eta, &
                                        zet_err_cutoff=[qmmm_env%image_charge_pot%eta], &
+                                       l_err_cutoff=[0], &
                                        l_max=0, &
                                        para_env=para_env)
 
