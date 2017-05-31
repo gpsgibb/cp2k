@@ -164,7 +164,7 @@ OPTFLAGS  = $(TARGET)
 #DIAG_DISABLE := $(DIAG_DISABLE),2571,3218
 
 ifeq (0,$(DBG))
-  OPTFLAGS  += -O$(OPT)
+  OPTFLAGS  += -O$(OPT) -qoverride_limits
   DFLAGS    += -DNDEBUG
   CXXFLAGS  += -fno-alias -ansi-alias $(FPCMODEL) $(FPFLAGS)
   CFLAGS    += -fno-alias -ansi-alias $(FPCMODEL) $(FPFLAGS)
@@ -248,7 +248,7 @@ endif
 ifneq (0,$(OMP))
   FCFLAGS   += -threads
   LDFLAGS   += -threads
-  OPTFLAGS  += -fopenmp -qoverride_limits
+  OPTFLAGS  += -fopenmp
   ifneq (0,$(NESTED))
     DFLAGS += -D__NESTED_OPENMP
   endif
@@ -593,6 +593,11 @@ ifneq (0,$(ACC))
     #LDFLAGS   += $(MIC_LDFLAGS)
   endif
 endif
+
+# filter-out override_limits flag since IFORT may run out of memory (SIGKILL)
+mp2_eri.o: mp2_eri.F
+	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(FC) -c $(filter-out -qoverride_limits,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 
 ifeq (1,$(shell echo $$((1 <= $(BEEP)))))
 mp2_optimize_ri_basis.o: mp2_optimize_ri_basis.F
