@@ -27,12 +27,16 @@ MODULE cp_fm_elpa
 #include "../base/base_uses.f90"
 
 #if defined (__ELPA)
-#include "elpa_kernel_constants.h"
-#if (__ELPA < 201611)
+# if (__ELPA < 201611)
+#  include "elpa_kernel_constants.h"
    USE elpa2,                           ONLY: solve_evp_real_2stage
-#else
+# elif (__ELPA < 201705)
+#  include "elpa_kernel_constants.h"
    USE elpa2,                           ONLY: elpa_solve_evp_real_2stage_double
-#endif
+# else
+   USE elpa_constants
+   USE elpa2,                           ONLY: elpa_solve_evp_real_2stage_double
+# endif
 #endif
 
    IMPLICIT NONE
@@ -138,7 +142,7 @@ $: "   elpa_kernel = ELPA2_REAL_KERNEL_"+kernel_const
 $: "#elif defined(ELPA_C_2STAGE_REAL_"+kernel_const+")"
 $: "   elpa_kernel = ELPA_C_2STAGE_REAL_"+kernel_const
 $: "#else"
-$: "   CPABORT('ELPA "+kernel_const+" kernel not available')"
+$: "   elpa_kernel = ELPA_2STAGE_REAL_"+kernel_const
 $: "#endif"
 #:enddef
 
@@ -154,7 +158,11 @@ $: "#endif"
         CASE(5)
 @:        pick_macro(BGQ)
         CASE(6)
+#if (__ELPA < 201705)
 @:        pick_macro(SSE)
+#else
+@:        pick_macro(SSE_ASSEMBLY)
+#endif
         CASE(7)
 @:        pick_macro(SSE_BLOCK2)
         CASE(8)
@@ -208,7 +216,7 @@ $: "#endif"
       MARK_USED(use_qr_unsafe)
       elpa_qr = use_qr
       elpa_qr_unsafe = .FALSE.
-#elif (__ELPA==201605) || (__ELPA==201611)
+#elif (__ELPA==201605) || (__ELPA==201611) || (__ELPA==201705)
       elpa_qr = use_qr
       elpa_qr_unsafe = use_qr_unsafe
 #else
@@ -316,7 +324,7 @@ $: "#endif"
 #elif (__ELPA==201502) || (__ELPA==201505) || (__ELPA==201511)
       ! Matrix order must be an integer multiple of the block size
       use_qr = elpa_qr .AND. MOD(n, nblk).EQ.0
-#elif (__ELPA==201605) || (__ELPA==201611)
+#elif (__ELPA==201605) || (__ELPA==201611) || (__ELPA==201705)
       ! Matrix order must be even
       use_qr = elpa_qr .AND. MOD(n, 2).EQ.0 
       ! Matrix order and block size must be greater than or equal to 64
@@ -361,14 +369,14 @@ $: "#endif"
             IF (.NOT. use_qr) THEN
 #if (__ELPA==201502) || (__ELPA==201505) || (__ELPA==201511)               
                WRITE(io_unit, '(A)') "ELPA| Matrix order is NOT divisible by block size"
-#elif (__ELPA==201605) || (__ELPA==201611)
+#elif (__ELPA==201605) || (__ELPA==201611) || (__ELPA==201705)
                IF (MOD(n, 2).NE.0 ) &
                   WRITE(io_unit, '(A)') "ELPA| Matrix order is NOT even"
                IF (nblk .LT. 64 .AND. .NOT. elpa_qr_unsafe) &
                   WRITE(io_unit, '(A)') "ELPA| Matrix block size is NOT 64 or greater"
 #endif
             ELSE
-#if (__ELPA==201605) || (__ELPA==201611)
+#if (__ELPA==201605) || (__ELPA==201611) || (__ELPA==201705)
                IF (nblk .LT. 64 .AND. elpa_qr_unsafe) &
                   WRITE(io_unit, '(A,L14)') "ELPA| Matrix block size check was bypassed"
 #endif
@@ -429,7 +437,7 @@ $: "#endif"
       END IF
 
 !---------------------------------------------------------------------------------------------------
-#elif (__ELPA==201611)
+#elif (__ELPA==201611) || (__ELPA==201705)
       IF (elpa_kernel == -1) THEN ! auto
          success = elpa_solve_evp_real_2stage_double(n, neig, m, n_rows, eval, v, n_rows, nblk, n_cols, &
                                                      comm_row, comm_col, group, &
