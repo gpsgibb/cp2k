@@ -65,11 +65,14 @@ CONTAINS
       CHARACTER(*), PARAMETER :: routineN = 'calculate_lri_ks_matrix', &
          routineP = moduleN//':'//routineN
 
-      INTEGER :: atom_a, atom_b, col, handle, i, iac, iatom, ikind, ilist, jatom, jkind, &
-         jneighbor, natom, nba, nbb, nfa, nfb, nkind, nlist, nn, nneighbor, row
+      INTEGER                                            :: atom_a, atom_b, col, handle, i, iac, &
+                                                            iatom, ikind, ilist, jatom, jkind, &
+                                                            jneighbor, natom, nba, nbb, nfa, nfb, &
+                                                            nkind, nlist, nm, nn, row
       INTEGER, DIMENSION(:), POINTER                     :: atom_of_kind
       LOGICAL                                            :: found, trans
-      REAL(KIND=dp)                                      :: dab, rab(3)
+      REAL(KIND=dp)                                      :: dab, isn, nsn, rab(3)
+      REAL(KIND=dp), ALLOCATABLE, DIMENSION(:)           :: vi
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:, :)        :: h_work
       REAL(KIND=dp), DIMENSION(:, :), POINTER            :: h_block
       TYPE(lri_int_type), POINTER                        :: lrii
@@ -94,7 +97,7 @@ CONTAINS
 
          DO WHILE (neighbor_list_iterate(nl_iterator) == 0)
             CALL get_iterator_info(nl_iterator, ikind=ikind, jkind=jkind, iatom=iatom, &
-                                   jatom=jatom, nlist=nlist, ilist=ilist, nnode=nneighbor, inode=jneighbor, &
+                                   jatom=jatom, nlist=nlist, ilist=ilist, inode=jneighbor, &
                                    r=rab)
 
             iac = ikind+nkind*(jkind-1)
@@ -132,19 +135,33 @@ CONTAINS
             atom_a = atom_of_kind(iatom)
             atom_b = atom_of_kind(jatom)
 
-            ! sum: Hab(a)+Hab(b)
-            ! Hab(a)
-            DO i = 1, nfa
-               h_work(1:nba, 1:nbb) = h_work(1:nba, 1:nbb)+ &
-                                      lri_v_int(ikind)%v_int(atom_a, i)*lrii%dacoef(1:nba, 1:nbb, i)
-            ENDDO
-            ! Hab(b)
-            IF (dab > lri_env%delta) THEN
-               DO i = 1, nfb
-                  h_work(1:nba, 1:nbb) = h_work(1:nba, 1:nbb)+ &
-                                         lri_v_int(jkind)%v_int(atom_b, i)*lrii%dacoef(1:nba, 1:nbb, nfa+i)
+            nsn = lrii%nsn
+            IF (iatom == jatom .AND. dab < lri_env%delta) THEN
+               nm = nfa
+               ALLOCATE (vi(nfa))
+               vi(1:nfa) = lri_v_int(ikind)%v_int(atom_a, 1:nfa)
+            ELSE
+               nm = nn
+               ALLOCATE (vi(nn))
+               vi(1:nfa) = lri_v_int(ikind)%v_int(atom_a, 1:nfa)
+               vi(nfa+1:nn) = lri_v_int(jkind)%v_int(atom_b, 1:nfb)
+            END IF
+            isn = SUM(lrii%sn(1:nm)*vi(1:nm))
+            vi(1:nm) = MATMUL(lrii%sinv(1:nm, 1:nm), vi(1:nm))-isn/nsn*lrii%sn(1:nm)
+            h_work(1:nba, 1:nbb) = h_work(1:nba, 1:nbb)+isn/nsn*lrii%soo(1:nba, 1:nbb)
+            IF (iatom == jatom .AND. dab < lri_env%delta) THEN
+               DO i = 1, nfa
+                  h_work(1:nba, 1:nbb) = h_work(1:nba, 1:nbb)+vi(i)*lrii%abaint(1:nba, 1:nbb, i)
                ENDDO
-            ENDIF
+            ELSE
+               DO i = 1, nfa
+                  h_work(1:nba, 1:nbb) = h_work(1:nba, 1:nbb)+vi(i)*lrii%abaint(1:nba, 1:nbb, i)
+               ENDDO
+               DO i = 1, nfb
+                  h_work(1:nba, 1:nbb) = h_work(1:nba, 1:nbb)+vi(nfa+i)*lrii%abbint(1:nba, 1:nbb, i)
+               ENDDO
+            END IF
+            DEALLOCATE (vi)
 
             ! add h_work to core hamiltonian
             IF (trans) THEN
