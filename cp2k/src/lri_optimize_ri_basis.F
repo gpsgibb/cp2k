@@ -57,7 +57,8 @@ MODULE lri_optimize_ri_basis
    USE powell,                          ONLY: opt_state_type,&
                                               powell_optimize
    USE qs_environment_types,            ONLY: get_qs_env,&
-                                              qs_environment_type
+                                              qs_environment_type,&
+                                              set_qs_env
    USE qs_neighbor_list_types,          ONLY: get_iterator_info,&
                                               neighbor_list_iterate,&
                                               neighbor_list_iterator_create,&
@@ -66,6 +67,8 @@ MODULE lri_optimize_ri_basis
                                               neighbor_list_set_p_type
    USE qs_rho_types,                    ONLY: qs_rho_get,&
                                               qs_rho_type
+
+!$ USE OMP_LIB, ONLY: omp_get_max_threads, omp_get_thread_num
 #include "./base/base_uses.f90"
 
    IMPLICIT NONE
@@ -141,6 +144,8 @@ CONTAINS
             CALL calc_lri_integrals_get_objective(lri_env, lri_density, qs_env, &
                                                   lri_opt, opt_state, pmatrix, para_env, &
                                                   nkind)
+            ! lri_density has been re-initialized!
+            CALL set_qs_env(qs_env, lri_density=lri_density)
          ENDIF
 
          IF (opt_state%state == -1) EXIT
@@ -540,7 +545,7 @@ CONTAINS
          CALL init_orb_basis_set(fbas)
       ENDDO
       CALL lri_basis_init(lri_env)
-      CALL calculate_lri_integrals(lri_env, qs_env, calculate_forces=.FALSE.)
+      CALL calculate_lri_integrals(lri_env, qs_env)
       CALL calculate_avec_lri(lri_env, lri_density, pmatrix)
       IF (lri_opt%use_condition_number) THEN
          CALL get_condition_number_of_overlap(lri_env)
@@ -575,7 +580,7 @@ CONTAINS
          routineP = moduleN//':'//routineN
 
       INTEGER :: handle, iac, iatom, ikind, ilist, isgfa, ispin, jatom, jkind, jneighbor, jsgfa, &
-         ksgfb, lsgfb, nba, nbb, nfa, nfb, nkind, nlist, nn, nneighbor, nspin
+         ksgfb, lsgfb, mepos, nba, nbb, nfa, nfb, nkind, nlist, nn, nneighbor, nspin, nthread
       LOGICAL                                            :: found, trans
       REAL(KIND=dp)                                      :: obj_ab, rhoexact_sq, rhofit_sq, rhomix
       REAL(KIND=dp), DIMENSION(:, :), POINTER            :: pbij
@@ -597,6 +602,9 @@ CONTAINS
 
          nkind = lri_env%lri_ints%nkind
          nspin = SIZE(pmatrix)
+         nthread = 1
+!$       nthread = omp_get_max_threads()
+
          fobj = 0._dp
          lri_opt%rho_diff = 0._dp
 
@@ -605,9 +613,18 @@ CONTAINS
             pmat => pmatrix(ispin)%matrix
             lri_rho => lri_density%lri_rhos(ispin)%lri_list
 
-            CALL neighbor_list_iterator_create(nl_iterator, soo_list)
-            DO WHILE (neighbor_list_iterate(nl_iterator) == 0)
-               CALL get_iterator_info(nl_iterator, ikind=ikind, jkind=jkind, iatom=iatom, &
+            CALL neighbor_list_iterator_create(nl_iterator, soo_list, nthread=nthread)
+!$OMP PARALLEL DEFAULT(NONE)&
+!$OMP SHARED (nthread,nl_iterator,pmat,nkind,fobj,lri_env,lri_opt,lri_rho)&
+!$OMP PRIVATE (mepos,ikind,jkind,iatom,jatom,nlist,ilist,nneighbor,jneighbor,&
+!$OMP          iac,lrii,lriir,lrho,nfa,nfb,nba,nbb,nn,rhoexact_sq,rhomix,rhofit_sq,&
+!$OMP          obj_ab,pbij,trans,found,isgfa,jsgfa,ksgfb,lsgfb)
+
+            mepos = 0
+!$          mepos = omp_get_thread_num()
+
+            DO WHILE (neighbor_list_iterate(nl_iterator, mepos) == 0)
+               CALL get_iterator_info(nl_iterator, mepos=mepos, ikind=ikind, jkind=jkind, iatom=iatom, &
                                       jatom=jatom, nlist=nlist, ilist=ilist, nnode=nneighbor, inode=jneighbor)
 
                iac = ikind+nkind*(jkind-1)
@@ -700,14 +717,17 @@ CONTAINS
                   obj_ab = 2.0_dp*(rhoexact_sq-2._dp*rhomix+rhofit_sq)
                ENDIF
 
+!$OMP CRITICAL(addfun)
                IF (lri_opt%use_condition_number) THEN
                   fobj = fobj+obj_ab+lri_opt%cond_weight*LOG(lrii%cond_num)
                   lri_opt%rho_diff = lri_opt%rho_diff+obj_ab
                ELSE
                   fobj = fobj+obj_ab
                ENDIF
+!$OMP END CRITICAL(addfun)
 
             ENDDO
+!$OMP END PARALLEL
 
             CALL neighbor_list_iterator_release(nl_iterator)
 
@@ -732,8 +752,9 @@ CONTAINS
          routineP = moduleN//':'//routineN
 
       INTEGER                                            :: handle, iac, iatom, ikind, ilist, info, &
-                                                            jatom, jkind, jneighbor, lwork, nfa, &
-                                                            nfb, nkind, nlist, nn, nneighbor
+                                                            jatom, jkind, jneighbor, lwork, mepos, &
+                                                            nfa, nfb, nkind, nlist, nn, nneighbor, &
+                                                            nthread
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:)           :: diag, off_diag, tau
       REAL(KIND=dp), DIMENSION(:), POINTER               :: work
       REAL(KIND=dp), DIMENSION(:, :), POINTER            :: smat
@@ -749,9 +770,20 @@ CONTAINS
       soo_list => lri_env%soo_list
 
       nkind = lri_env%lri_ints%nkind
-      CALL neighbor_list_iterator_create(nl_iterator, soo_list)
-      DO WHILE (neighbor_list_iterate(nl_iterator) == 0)
-         CALL get_iterator_info(nl_iterator, ikind=ikind, jkind=jkind, iatom=iatom, &
+      nthread = 1
+!$    nthread = omp_get_max_threads()
+
+      CALL neighbor_list_iterator_create(nl_iterator, soo_list, nthread=nthread)
+!$OMP PARALLEL DEFAULT(NONE)&
+!$OMP SHARED (nthread,nl_iterator,nkind,lri_env)&
+!$OMP PRIVATE (mepos,ikind,jkind,iatom,jatom,nlist,ilist,nneighbor,jneighbor,&
+!$OMP          diag,off_diag,smat,tau,work,iac,lrii,nfa,nfb,nn,info,lwork)
+
+      mepos = 0
+!$    mepos = omp_get_thread_num()
+
+      DO WHILE (neighbor_list_iterate(nl_iterator, mepos) == 0)
+         CALL get_iterator_info(nl_iterator, mepos=mepos, ikind=ikind, jkind=jkind, iatom=iatom, &
                                 jatom=jatom, nlist=nlist, ilist=ilist, nnode=nneighbor, inode=jneighbor)
 
          iac = ikind+nkind*(jkind-1)
@@ -795,6 +827,7 @@ CONTAINS
 
          DEALLOCATE (diag, off_diag, smat, tau, work)
       END DO
+!$OMP END PARALLEL
 
       CALL neighbor_list_iterator_release(nl_iterator)
 

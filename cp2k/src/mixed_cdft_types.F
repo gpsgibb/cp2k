@@ -10,6 +10,7 @@
 !> \author Nico Holmberg [01.2017]
 ! **************************************************************************************************
 MODULE mixed_cdft_types
+   USE cp_array_utils,                  ONLY: cp_1d_r_p_type
    USE cp_blacs_env,                    ONLY: cp_blacs_env_release,&
                                               cp_blacs_env_type
    USE cp_log_handling,                 ONLY: cp_logger_p_type,&
@@ -135,8 +136,8 @@ MODULE mixed_cdft_types
 !>                          should be printed out
 !> \param identical_constraints flag which determines if the constraint definitions are identical
 !>                               across all CDFT states
-!> \param is_charge_constraint list of logicals which determine if the constraint should be applied
-!>                             to the total charge density or the magnetization density
+!> \param constraint_type list of integers which determine what type of constraint should be applied
+!>                             to each constraint group
 !> \param eps_rho_rspace threshold to determine when the realspace density can be considered zero
 !> \param sim_dt timestep of the MD simulation
 !> \param eps_svd value that controls which matrix inversion method to use
@@ -148,10 +149,12 @@ MODULE mixed_cdft_types
 !> \param dlb_control container for load balancing structures
 !> \param qs_kind_set the qs_kind_set needed to setup a confinement cavity
 !> \param pw_env the pw_env that holds the fully distributed realspace grid
+!> \param occupations occupation numbers in case non-uniform occupation
 ! **************************************************************************************************
    TYPE mixed_cdft_type
       INTEGER                                          :: sim_step, multiplicity, &
                                                           nconstraint
+      INTEGER, DIMENSION(:, :), ALLOCATABLE            :: constraint_type
       INTEGER, POINTER, DIMENSION(:)                   :: source_list, dest_list, &
                                                           recv_bo, source_list_save, &
                                                           dest_list_save
@@ -165,18 +168,19 @@ MODULE mixed_cdft_types
                                                           is_parallel, use_lowdin, &
                                                           do_ci, nonortho_coupling, &
                                                           identical_constraints
-      LOGICAL, DIMENSION(:, :), ALLOCATABLE            :: is_charge_constraint
       REAL(KIND=dp)                                    :: eps_rho_rspace, sim_dt, &
                                                           eps_svd
       REAL(KIND=dp), POINTER, DIMENSION(:, :, :)       :: weight, cavity
       TYPE(becke_constraint_type), POINTER             :: becke_control
       TYPE(buffers), DIMENSION(:), POINTER             :: sendbuff
+      TYPE(cp_1d_r_p_type), ALLOCATABLE, &
+         DIMENSION(:, :)                               :: occupations
       TYPE(cp_blacs_env_type), POINTER                 :: blacs_env
+      TYPE(cp_logger_p_type), DIMENSION(:), POINTER    :: sub_logger
       TYPE(mixed_cdft_dlb_type), POINTER               :: dlb_control
+      TYPE(pw_env_type), POINTER                       :: pw_env
       TYPE(qs_kind_type), DIMENSION(:), &
          POINTER                                       :: qs_kind_set
-      TYPE(pw_env_type), POINTER                       :: pw_env
-      TYPE(cp_logger_p_type), DIMENSION(:), POINTER    :: sub_logger
    END TYPE mixed_cdft_type
 
 ! **************************************************************************************************
@@ -251,7 +255,7 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'mixed_cdft_type_release', &
          routineP = moduleN//':'//routineN
 
-      INTEGER                                            :: i
+      INTEGER                                            :: i, j
 
       CALL pw_env_release(cdft_control%pw_env)
       IF (ASSOCIATED(cdft_control%dest_list)) &
@@ -276,8 +280,17 @@ CONTAINS
          DEALLOCATE (cdft_control%weight)
       IF (ASSOCIATED(cdft_control%cavity)) &
          DEALLOCATE (cdft_control%cavity)
-      IF (ALLOCATED(cdft_control%is_charge_constraint)) &
-         DEALLOCATE (cdft_control%is_charge_constraint)
+      IF (ALLOCATED(cdft_control%constraint_type)) &
+         DEALLOCATE (cdft_control%constraint_type)
+      IF (ALLOCATED(cdft_control%occupations)) THEN
+         DO i = 1, SIZE(cdft_control%occupations, 1)
+            DO j = 1, SIZE(cdft_control%occupations, 2)
+               IF (ASSOCIATED(cdft_control%occupations(i, j)%array)) &
+                  DEALLOCATE (cdft_control%occupations(i, j)%array)
+            END DO
+         END DO
+         DEALLOCATE (cdft_control%occupations)
+      END IF
       IF (ASSOCIATED(cdft_control%dlb_control)) &
          CALL mixed_cdft_dlb_release(cdft_control%dlb_control)
       IF (ASSOCIATED(cdft_control%sendbuff)) THEN

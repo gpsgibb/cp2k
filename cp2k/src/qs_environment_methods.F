@@ -215,9 +215,9 @@ CONTAINS
       TYPE(ewald_environment_type), POINTER              :: ewald_env
       TYPE(ewald_pw_type), POINTER                       :: ewald_pw
       TYPE(pw_env_type), POINTER                         :: new_pw_env
-      TYPE(pw_p_type), POINTER                           :: external_vxc, rho0_gs, rho0_rs, &
-                                                            rho_core, rho_nlcc, rho_nlcc_g, vee, &
-                                                            vppl
+      TYPE(pw_p_type), POINTER                           :: embed_pot, external_vxc, rho0_gs, &
+                                                            rho0_rs, rho_core, rho_nlcc, &
+                                                            rho_nlcc_g, vee, vppl
       TYPE(pw_pool_type), POINTER                        :: auxbas_pw_pool
       TYPE(pw_type), POINTER                             :: v_hartree_rspace
       TYPE(qs_kind_type), DIMENSION(:), POINTER          :: qs_kind_set
@@ -228,7 +228,7 @@ CONTAINS
       ! rebuild pw_env
       NULLIFY (dft_control, cell, ks_env, v_hartree_rspace, auxbas_pw_pool)
       NULLIFY (rho0_mpole, rho0_gs, rho0_rs)
-      NULLIFY (ewald_env, ewald_pw, new_pw_env, external_vxc, rho_core, rho_nlcc, rho_nlcc_g, vee, vppl)
+      NULLIFY (ewald_env, ewald_pw, new_pw_env, external_vxc, rho_core, rho_nlcc, rho_nlcc_g, vee, vppl, embed_pot)
 
       CALL get_qs_env(qs_env, ks_env=ks_env, pw_env=new_pw_env)
       IF (.NOT. ASSOCIATED(new_pw_env)) THEN
@@ -386,6 +386,21 @@ CONTAINS
             external_vxc%pw%in_space = REALSPACE
             CALL set_qs_env(qs_env, external_vxc=external_vxc)
             dft_control%read_external_vxc = .TRUE.
+         END IF
+
+         ! Embedding Reallocate: embed_pot
+         IF (dft_control%apply_embed_pot) THEN
+            NULLIFY (embed_pot)
+            CALL get_qs_env(qs_env, pw_env=new_pw_env, embed_pot=embed_pot)
+            IF (ASSOCIATED(embed_pot)) THEN
+               CALL pw_release(embed_pot%pw)
+               DEALLOCATE (embed_pot)
+            ENDIF
+            ALLOCATE (embed_pot)
+            CALL pw_env_get(new_pw_env, auxbas_pw_pool=auxbas_pw_pool)
+            CALL pw_pool_create_pw(auxbas_pw_pool, embed_pot%pw, use_data=REALDATA3D)
+            embed_pot%pw%in_space = REALSPACE
+            CALL set_qs_env(qs_env, embed_pot=embed_pot)
          END IF
 
          CALL get_ks_env(ks_env, v_hartree_rspace=v_hartree_rspace)
