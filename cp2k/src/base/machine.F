@@ -70,8 +70,14 @@ END SUBROUTINE
 !>      might still roll, if not called multiple times per count_max/count_rate
 ! **************************************************************************************************
 FUNCTION m_walltime() RESULT (wt)
+#if defined(__LIBXSMM)
+      USE libxsmm, ONLY: libxsmm_timer_tick, libxsmm_timer_duration
+#endif
       REAL(KIND=dp)                                      :: wt
 
+#if defined(__LIBXSMM)
+      wt = libxsmm_timer_duration(0, libxsmm_timer_tick())
+#else
       INTEGER(KIND=int_8)                                :: count
       INTEGER(KIND=int_8), SAVE                          :: count_max, count_rate, cycles = -1, &
                                                             last_count
@@ -108,6 +114,7 @@ FUNCTION m_walltime() RESULT (wt)
     !$ ELSE
     !$    wt = OMP_GET_WTIME ()
     !$ ENDIF
+#endif
 END FUNCTION m_walltime
 
 ! **************************************************************************************************
