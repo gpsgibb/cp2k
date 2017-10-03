@@ -107,6 +107,10 @@ public:
   }
 
 public:
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 949) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+  libxsmm_xmmfunction kernel() const { return m_predispatched.kernel(); }
+#endif
+
   bool efficient() const {
     return 0 != m_predispatched;
   }
@@ -225,75 +229,87 @@ template<size_t N, typename T, typename U>
 LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t stacksize, const smm_type<T,U>& smm,
   const T *LIBXSMM_ACC_RESTRICT a, const T *LIBXSMM_ACC_RESTRICT b, T *LIBXSMM_ACC_RESTRICT c)
 {
-  const int nstacksize = static_cast<int>(stacksize * N);
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 949) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+  if (0 != smm.kernel().xmm) {
+    const unsigned int *const params = reinterpret_cast<const unsigned int*>(stack);
+    LIBXSMM_ACC_ASSERT(sizeof(U) == sizeof(unsigned int));
+    libxsmm_mmbatch(smm.kernel(), sizeof(T), a, b, c, 1/*index_base*/, LIBXSMM_ACC_PARAM_COUNT * sizeof(U),
+      params + LIBXSMM_ACC_PARAM_A, params + LIBXSMM_ACC_PARAM_B, params + LIBXSMM_ACC_PARAM_C,
+      static_cast<unsigned int>(stacksize));
+  }
+  else
+#endif
+  {
+    const int nstacksize = static_cast<int>(stacksize * N);
 #if defined(LIBXSMM_ACC_OPENMP)
 # pragma omp parallel for LIBXSMM_ACC_SCHEDULE
 #endif
-  for (int s = 0; s < nstacksize;
+    for (int s = 0; s < nstacksize;
 #if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-    s += ((LIBXSMM_ACC_NLOCAL) * N))
+      s += ((LIBXSMM_ACC_NLOCAL) * N))
 #else
-    s += N)
-#endif
-  {
-#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-    T tmp[LIBXSMM_ACC_MAX_RESULT_SIZE];
-#endif
-    U current[LIBXSMM_ACC_PARAM_COUNT], next[LIBXSMM_ACC_PARAM_COUNT];
-    U *pcur = current, *pnxt = next, i = s;
-    for (U j = 0; j < LIBXSMM_ACC_PARAM_COUNT; ++j) current[j] = stack[s+j];
-#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-    const int end = s + std::min(static_cast<int>((LIBXSMM_ACC_NLOCAL) * N), nstacksize - s);
-    do
+      s += N)
 #endif
     {
-      const U ldc = pcur[LIBXSMM_ACC_PARAM_M];
-      T *const ci = c + pcur[LIBXSMM_ACC_PARAM_C] - 1;
 #if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-      smm.zero_c(tmp, ldc * pcur[LIBXSMM_ACC_PARAM_N]);
-#else
-      T *const tmp = ci;
+      T tmp[LIBXSMM_ACC_MAX_RESULT_SIZE];
 #endif
+      U current[LIBXSMM_ACC_PARAM_COUNT], next[LIBXSMM_ACC_PARAM_COUNT];
+      U *pcur = current, *pnxt = next, i = s;
+      for (U j = 0; j < LIBXSMM_ACC_PARAM_COUNT; ++j) current[j] = stack[s+j];
 #if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-      for (;;)
+      const int end = s + std::min(static_cast<int>((LIBXSMM_ACC_NLOCAL) * N), nstacksize - s);
+      do
 #endif
       {
-        i += N; // next
-        if (i < nstacksize) {
-          for (U j = 0; j < LIBXSMM_ACC_PARAM_COUNT; ++j) pnxt[j] = stack[i+j];
-#if defined(__LIBXSMM) && (0 != LIBXSMM_PREFETCH || 0 != LIBXSMM_JIT)
-          smm(pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], pcur[LIBXSMM_ACC_PARAM_K], ldc,
-            a + pcur[LIBXSMM_ACC_PARAM_A] - 1, b + pcur[LIBXSMM_ACC_PARAM_B] - 1, tmp,
-            LIBXSMM_PREFETCH_A(a + pnxt[LIBXSMM_ACC_PARAM_A] - 1),
-            LIBXSMM_PREFETCH_B(b + pnxt[LIBXSMM_ACC_PARAM_B] - 1),
-            LIBXSMM_PREFETCH_C(ci));
+        const U ldc = pcur[LIBXSMM_ACC_PARAM_M];
+        T *const ci = c + pcur[LIBXSMM_ACC_PARAM_C] - 1;
+#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
+        smm.zero_c(tmp, ldc * pcur[LIBXSMM_ACC_PARAM_N]);
 #else
-          smm(pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], pcur[LIBXSMM_ACC_PARAM_K], ldc,
-            a + pcur[LIBXSMM_ACC_PARAM_A] - 1, b + pcur[LIBXSMM_ACC_PARAM_B] - 1, tmp);
+        T *const tmp = ci;
 #endif
 #if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-          if (pcur[LIBXSMM_ACC_PARAM_C] != pnxt[LIBXSMM_ACC_PARAM_C] || end <= i) {
-            break;
+        for (;;)
+#endif
+        {
+          i += N; // next
+          if (i < nstacksize) {
+            for (U j = 0; j < LIBXSMM_ACC_PARAM_COUNT; ++j) pnxt[j] = stack[i+j];
+#if defined(__LIBXSMM) && (0 != LIBXSMM_PREFETCH || 0 != LIBXSMM_JIT)
+            smm(pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], pcur[LIBXSMM_ACC_PARAM_K], ldc,
+              a + pcur[LIBXSMM_ACC_PARAM_A] - 1, b + pcur[LIBXSMM_ACC_PARAM_B] - 1, tmp,
+              LIBXSMM_PREFETCH_A(a + pnxt[LIBXSMM_ACC_PARAM_A] - 1),
+              LIBXSMM_PREFETCH_B(b + pnxt[LIBXSMM_ACC_PARAM_B] - 1),
+              LIBXSMM_PREFETCH_C(ci));
+#else
+            smm(pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], pcur[LIBXSMM_ACC_PARAM_K], ldc,
+              a + pcur[LIBXSMM_ACC_PARAM_A] - 1, b + pcur[LIBXSMM_ACC_PARAM_B] - 1, tmp);
+#endif
+#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
+            if (pcur[LIBXSMM_ACC_PARAM_C] != pnxt[LIBXSMM_ACC_PARAM_C] || end <= i) {
+              break;
+            }
+            std::swap(pcur, pnxt);
+#endif
           }
-          std::swap(pcur, pnxt);
-#endif
-        }
-        else { // last element of the matrix-stack (there is no next element to be prefetched)
-          const T *const ai = a + pcur[LIBXSMM_ACC_PARAM_A] - 1, *const bi = b + pcur[LIBXSMM_ACC_PARAM_B] - 1;
-          smm(pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], pcur[LIBXSMM_ACC_PARAM_K], ldc, ai, bi, tmp);
+          else { // last element of the matrix-stack (there is no next element to be prefetched)
+            const T *const ai = a + pcur[LIBXSMM_ACC_PARAM_A] - 1, *const bi = b + pcur[LIBXSMM_ACC_PARAM_B] - 1;
+            smm(pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], pcur[LIBXSMM_ACC_PARAM_K], ldc, ai, bi, tmp);
 #if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-          break;
+            break;
 #endif
+          }
         }
+#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
+        smm.copy_c(tmp, ci, pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], ldc);
+#endif
+        std::swap(pcur, pnxt);
       }
 #if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-      smm.copy_c(tmp, ci, pcur[LIBXSMM_ACC_PARAM_M], pcur[LIBXSMM_ACC_PARAM_N], ldc);
+      while (i < end);
 #endif
-      std::swap(pcur, pnxt);
     }
-#if (defined(LIBXSMM_ACC_NLOCAL) && (1 < (LIBXSMM_ACC_NLOCAL)))
-    while(i < end);
-#endif
   }
 }
 
