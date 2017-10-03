@@ -107,7 +107,7 @@ public:
   }
 
 public:
-#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 949) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 951) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
   libxsmm_xmmfunction kernel() const { return m_predispatched.kernel(); }
 #endif
 
@@ -229,13 +229,13 @@ template<size_t N, typename T, typename U>
 LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t stacksize, const smm_type<T,U>& smm,
   const T *LIBXSMM_ACC_RESTRICT a, const T *LIBXSMM_ACC_RESTRICT b, T *LIBXSMM_ACC_RESTRICT c)
 {
-#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 949) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 951) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
   if (0 != smm.kernel().xmm) {
     const unsigned int *const params = reinterpret_cast<const unsigned int*>(stack);
     LIBXSMM_ACC_ASSERT(sizeof(U) == sizeof(unsigned int));
-    libxsmm_mmbatch(smm.kernel(), sizeof(T), a, b, c, 1/*index_base*/, LIBXSMM_ACC_NPARAMS * sizeof(U),
+    libxsmm_mmbatch_thread(smm.kernel(), sizeof(T), a, b, c, 1/*index_base*/, LIBXSMM_ACC_NPARAMS * sizeof(U),
       params + LIBXSMM_ACC_PARAM_A, params + LIBXSMM_ACC_PARAM_B, params + LIBXSMM_ACC_PARAM_C,
-      static_cast<unsigned int>(stacksize));
+      static_cast<unsigned int>(stacksize), 0/*tid*/, 1/*nthreads*/);
   }
   else
 #endif
