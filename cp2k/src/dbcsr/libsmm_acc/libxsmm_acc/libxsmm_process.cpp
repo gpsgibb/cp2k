@@ -233,7 +233,7 @@ LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t s
   if (0 != smm.kernel().xmm) {
     const unsigned int *const params = reinterpret_cast<const unsigned int*>(stack);
     LIBXSMM_ACC_ASSERT(sizeof(U) == sizeof(unsigned int));
-    libxsmm_mmbatch(smm.kernel(), sizeof(T), a, b, c, 1/*index_base*/, LIBXSMM_ACC_PARAM_COUNT * sizeof(U),
+    libxsmm_mmbatch(smm.kernel(), sizeof(T), a, b, c, 1/*index_base*/, LIBXSMM_ACC_NPARAMS * sizeof(U),
       params + LIBXSMM_ACC_PARAM_A, params + LIBXSMM_ACC_PARAM_B, params + LIBXSMM_ACC_PARAM_C,
       static_cast<unsigned int>(stacksize));
   }
