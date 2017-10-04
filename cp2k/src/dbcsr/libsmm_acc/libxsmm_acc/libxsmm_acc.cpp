@@ -121,13 +121,15 @@ void libxsmm_acc_reconfigure()
     const char *const env_elpa = getenv("CP2K_ELPA"), *const env_qr = getenv("CP2K_ELPA_QR");
     const int elpa = (0 == env_elpa || 0 == *env_elpa) ? 3/*block6*/ : atoi(env_elpa);
     const int qr = (0 == env_qr || 0 == *env_qr) ? 0/*disable*/ : atoi(env_qr);
+
+    const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr_unsafe = ((0 != elpa && (1 < qr || -1 > qr)) ? LIBXSMM_ACC_FTRUE : LIBXSMM_ACC_FALSE);
+    const LIBXSMM_ACC_FTYPE_LOGICAL elpa_print = ((0 != elpa && 0 <= qr) ? LIBXSMM_ACC_FALSE : LIBXSMM_ACC_FTRUE);
+    const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr = ((0 != elpa && 0 != qr) ? LIBXSMM_ACC_FTRUE : LIBXSMM_ACC_FALSE);
+    LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
+    int k_elpa = 1; // auto
+
     if (0 != elpa) {
       const char *const diag_lib = "ELPA";
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_print = (0 <= qr ? LIBXSMM_ACC_FALSE : LIBXSMM_ACC_FTRUE);
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr_unsafe = ((1 < qr || -1 > qr) ? LIBXSMM_ACC_FTRUE : LIBXSMM_ACC_FALSE);
-      const LIBXSMM_ACC_FTYPE_LOGICAL elpa_qr = (0 != qr ? LIBXSMM_ACC_FTRUE : LIBXSMM_ACC_FALSE);
-      LIBXSMM_ACC_FTYPE_LOGICAL switched = LIBXSMM_ACC_FALSE;
-      int k_elpa = 1; // auto
 # if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
       if (0 < elpa) {
         const int cpuid = LIBXSMM_MIN(libxsmm_cpuid(), LIBXSMM_X86_AVX512);
@@ -141,6 +143,11 @@ void libxsmm_acc_reconfigure()
       LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(diag_lib, &switched, &k_elpa,
         &elpa_qr, &elpa_print, &elpa_qr_unsafe,
         strlen(diag_lib));
+    }
+    else if (0 != isalpha(*env_elpa)) {
+      LIBXSMM_ACC_FSYMBOL(cp_fm_diag_mp_diag_init)(env_elpa, &switched, &k_elpa,
+        &elpa_qr, &elpa_print, &elpa_qr_unsafe,
+        strlen(env_elpa));
     }
   }
 #endif
