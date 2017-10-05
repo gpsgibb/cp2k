@@ -96,12 +96,7 @@ MODULE xc_libxc_wrap
                                              xc_f90_gga_exc,&
                                              xc_f90_gga_exc_vxc,&
                                              xc_f90_gga_fxc,&
-                                             xc_f90_gga_lb_set_par,&
                                              xc_f90_gga_vxc,&
-                                             xc_f90_gga_x_hjs_set_par,&
-                                             xc_f90_gga_x_wpbeh_set_par,&
-!
-                                             xc_f90_hyb_gga_xc_hse_set_par,&
 !
                                              xc_f90_info_family,&
                                              xc_f90_info_kind,&
@@ -110,24 +105,31 @@ MODULE xc_libxc_wrap
                                              xc_f90_info_flags,&
 !
                                              xc_f90_lda,&
-                                             xc_f90_lda_c_1d_csc_set_par,&
-                                             xc_f90_lda_c_2d_prm_set_par,&
-                                             xc_f90_lda_c_xalpha_set_par,&
                                              xc_f90_lda_exc,&
                                              xc_f90_lda_exc_vxc,&
                                              xc_f90_lda_fxc,&
                                              xc_f90_lda_kxc,&
                                              xc_f90_lda_vxc,&
-                                             xc_f90_lda_x_1d_set_par,&
-                                             xc_f90_lda_x_set_par,&
 !
                                              xc_f90_mgga,&
                                              xc_f90_mgga_exc,&
                                              xc_f90_mgga_exc_vxc,&
                                              xc_f90_mgga_fxc,&
                                              xc_f90_mgga_vxc,&
+#if (XC_MAJOR_VERSION <= 3)
+                                             xc_f90_gga_lb_set_par,&
+                                             xc_f90_gga_x_hjs_set_par,&
+                                             xc_f90_gga_x_wpbeh_set_par,&
+                                             xc_f90_hyb_gga_xc_hse_set_par,&
+                                             xc_f90_lda_c_1d_csc_set_par,&
+                                             xc_f90_lda_c_2d_prm_set_par,&
+                                             xc_f90_lda_c_xalpha_set_par,&
+                                             xc_f90_lda_x_1d_set_par,&
+                                             xc_f90_lda_x_set_par,&
                                              xc_f90_mgga_x_tb09_set_par,&
-!
+#else ! LIBXC v4 (and later)
+                                             xc_f90_func_set_ext_params,&
+#endif
                                              xc_f90_pointer_t,&
 !
                                              XC_FAMILY_UNKNOWN,&
@@ -520,6 +522,7 @@ CONTAINS
 !      result in wrong numbers or a crash.
 !      --> LibXC needs to provide more informations via a function.
       IF (params(1) < 0.99e20_dp) THEN
+#if (XC_MAJOR_VERSION <= 3)
          SELECT CASE (func_id)
          CASE (XC_LDA_X)
             CALL xc_f90_lda_x_set_par(xc_func, params(1), NINT(params(2)), params(3))
@@ -545,6 +548,11 @@ CONTAINS
          CASE (XC_GGA_X_WPBEH)
             CALL xc_f90_gga_x_wpbeh_set_par(xc_func, params(1))
          END SELECT
+#else ! LIBXC v4 (and later)
+         ! F90 interface incorrectly takes a real value rather than an array of real values
+         ! passing the first element of params attempts to pass the entire array reference
+         CALL xc_f90_func_set_ext_params(xc_func, params(1))
+#endif
       END IF
 
       IF (IAND(xc_f90_info_flags(xc_info), XC_FLAGS_HAVE_EXC) == XC_FLAGS_HAVE_EXC) THEN
