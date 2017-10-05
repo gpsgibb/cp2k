@@ -79,7 +79,7 @@ RECONFIGURE ?= 1
 MEMKIND ?= 1
 OFFLOAD ?= 0
 NESTED ?= 0
-ELPA ?= 201611
+ELPA ?= 201705
 
 # CP2K's configuation namespace (prefix)
 #
