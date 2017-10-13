@@ -290,10 +290,17 @@ CONTAINS
 
                      ! *** Decontract density matrix block ***
                      IF (iatom <= jatom) THEN
+#if defined(__LIBXSMM)
+                        CALL libxsmm_dgemm("N", "N", ncoa, nsgfb(jset), nsgfa(iset), &
+                                   1.0_dp, sphi_a(1, sgfa), SIZE(sphi_a, 1), &
+                                   p_block(sgfa, sgfb), SIZE(p_block, 1), &
+                                   0.0_dp, work(1, 1), SIZE(work, 1))
+#else
                         CALL dgemm("N", "N", ncoa, nsgfb(jset), nsgfa(iset), &
                                    1.0_dp, sphi_a(1, sgfa), SIZE(sphi_a, 1), &
                                    p_block(sgfa, sgfb), SIZE(p_block, 1), &
                                    0.0_dp, work(1, 1), SIZE(work, 1))
+#endif
                      ELSE
                         CALL dgemm("N", "T", ncoa, nsgfb(jset), nsgfa(iset), &
                                    1.0_dp, sphi_a(1, sgfa), SIZE(sphi_a, 1), &
@@ -440,12 +447,17 @@ CONTAINS
             DO jset = 1, nsetb
                ncob = npgfb(jset)*ncoset(lb_max(jset))
                sgfb = first_sgfb(1, jset)
-
+#if defined(__LIBXSMM)
+               CALL libxsmm_dgemm("N", "N", ncoa, nsgfb(jset), ncob, &
+                          1.0_dp, hab(1, 1, iset, jset), SIZE(hab, 1), &
+                          sphi_b(1, sgfb), SIZE(sphi_b, 1), &
+                          0.0_dp, work(1, 1), SIZE(work, 1))
+#else
                CALL dgemm("N", "N", ncoa, nsgfb(jset), ncob, &
                           1.0_dp, hab(1, 1, iset, jset), SIZE(hab, 1), &
                           sphi_b(1, sgfb), SIZE(sphi_b, 1), &
                           0.0_dp, work(1, 1), SIZE(work, 1))
-
+#endif
 !$OMP CRITICAL(h_block_critical)
                IF (iatom <= jatom) THEN
                   CALL dgemm("T", "N", nsgfa(iset), nsgfb(jset), ncoa, &

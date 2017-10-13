@@ -342,7 +342,11 @@ CONTAINS
       IF (my_trans) THEN
          CALL dgemm("N", "T", na, mb, ma, 1.0_dp, ca, lda, sab, lds, 0.0_dp, work, ldw)
       ELSE
+#if defined(__LIBXSMM)
+         CALL libxsmm_dgemm("N", "N", na, mb, ma, 1.0_dp, ca, lda, sab, lds, 0.0_dp, work, ldw)
+#else
          CALL dgemm("N", "N", na, mb, ma, 1.0_dp, ca, lda, sab, lds, 0.0_dp, work, ldw)
+#endif
       END IF
       CALL dgemm("N", "T", na, nb, mb, 1.0_dp, work, ldw, cb, ldb, 0.0_dp, qab, ldq)
 

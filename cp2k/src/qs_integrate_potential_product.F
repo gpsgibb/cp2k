@@ -582,19 +582,33 @@ CONTAINS
                sgfb = first_sgfb(1, jset)
                IF (pab_required) THEN
                   IF (iatom <= jatom) THEN
+#if defined(__LIBXSMM)
+                     CALL libxsmm_dgemm("N", "N", ncoa, nsgfb(jset), nsgfa(iset), &
+                                1.0_dp, sphi_a(1, sgfa), SIZE(sphi_a, 1), &
+                                p_block(sgfa, sgfb), SIZE(p_block, 1), &
+                                0.0_dp, work(1, 1), SIZE(work, 1))
+#else
                      CALL dgemm("N", "N", ncoa, nsgfb(jset), nsgfa(iset), &
                                 1.0_dp, sphi_a(1, sgfa), SIZE(sphi_a, 1), &
                                 p_block(sgfa, sgfb), SIZE(p_block, 1), &
                                 0.0_dp, work(1, 1), SIZE(work, 1))
+#endif
                      CALL dgemm("N", "T", ncoa, ncob, nsgfb(jset), &
                                 1.0_dp, work(1, 1), SIZE(work, 1), &
                                 sphi_b(1, sgfb), SIZE(sphi_b, 1), &
                                 0.0_dp, pab(1, 1), SIZE(pab, 1))
                   ELSE
+#if defined(__LIBXSMM)
+                     CALL libxsmm_dgemm("N", "N", ncob, nsgfa(iset), nsgfb(jset), &
+                                1.0_dp, sphi_b(1, sgfb), SIZE(sphi_b, 1), &
+                                p_block(sgfb, sgfa), SIZE(p_block, 1), &
+                                0.0_dp, work(1, 1), SIZE(work, 1))
+#else
                      CALL dgemm("N", "N", ncob, nsgfa(iset), nsgfb(jset), &
                                 1.0_dp, sphi_b(1, sgfb), SIZE(sphi_b, 1), &
                                 p_block(sgfb, sgfa), SIZE(p_block, 1), &
                                 0.0_dp, work(1, 1), SIZE(work, 1))
+#endif
                      CALL dgemm("N", "T", ncob, ncoa, nsgfa(iset), &
                                 1.0_dp, work(1, 1), SIZE(work, 1), &
                                 sphi_a(1, sgfa), SIZE(sphi_a, 1), &
@@ -715,19 +729,33 @@ CONTAINS
             ! contract the block into h if we're done with the current set pair
             IF (new_set_pair_coming) THEN
                IF (iatom <= jatom) THEN
+#if defined(__LIBXSMM)
+                  CALL libxsmm_dgemm("N", "N", ncoa, nsgfb(jset), ncob, &
+                             1.0_dp, hab(1, 1), SIZE(hab, 1), &
+                             sphi_b(1, sgfb), SIZE(sphi_b, 1), &
+                             0.0_dp, work(1, 1), SIZE(work, 1))
+#else
                   CALL dgemm("N", "N", ncoa, nsgfb(jset), ncob, &
                              1.0_dp, hab(1, 1), SIZE(hab, 1), &
                              sphi_b(1, sgfb), SIZE(sphi_b, 1), &
                              0.0_dp, work(1, 1), SIZE(work, 1))
+#endif
                   CALL dgemm("T", "N", nsgfa(iset), nsgfb(jset), ncoa, &
                              1.0_dp, sphi_a(1, sgfa), SIZE(sphi_a, 1), &
                              work(1, 1), SIZE(work, 1), &
                              1.0_dp, h_block(sgfa, sgfb), SIZE(h_block, 1))
                ELSE
+#if defined(__LIBXSMM)
+                  CALL libxsmm_dgemm("N", "N", ncob, nsgfa(iset), ncoa, &
+                             1.0_dp, hab(1, 1), SIZE(hab, 1), &
+                             sphi_a(1, sgfa), SIZE(sphi_a, 1), &
+                             0.0_dp, work(1, 1), SIZE(work, 1))
+#else
                   CALL dgemm("N", "N", ncob, nsgfa(iset), ncoa, &
                              1.0_dp, hab(1, 1), SIZE(hab, 1), &
                              sphi_a(1, sgfa), SIZE(sphi_a, 1), &
                              0.0_dp, work(1, 1), SIZE(work, 1))
+#endif
                   CALL dgemm("T", "N", nsgfb(jset), nsgfa(iset), ncob, &
                              1.0_dp, sphi_b(1, sgfb), SIZE(sphi_b, 1), &
                              work(1, 1), SIZE(work, 1), &
