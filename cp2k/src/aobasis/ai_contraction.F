@@ -137,7 +137,11 @@ CONTAINS
          ! Full transform
          ALLOCATE (work(nal, mbl))
          ldw = nal
+#if defined(__LIBXSMM)
+         CALL libxsmm_dgemm("N", "N", nal, mbl, nbl, 1.0_dp, sab(1, 1), lds, cb(1, 1), ldb, 0.0_dp, work(1, 1), ldw)
+#else
          CALL dgemm("N", "N", nal, mbl, nbl, 1.0_dp, sab(1, 1), lds, cb(1, 1), ldb, 0.0_dp, work(1, 1), ldw)
+#endif
          IF (my_trans) THEN
             CALL dgemm("T", "N", mbl, mal, nal, fs, work(1, 1), ldw, ca(1, 1), lda, 0.0_dp, qab(1, 1), ldq)
          ELSE
@@ -162,7 +166,11 @@ CONTAINS
             nal = SIZE(sab, 1)
          END IF
          IF (my_trans) THEN
+#if defined(__LIBXSMM)
+            CALL libxsmm_dgemm("N", "N", nal, mbl, nbl, fs, sab(1, 1), lds, cb(1, 1), ldb, 0.0_dp, qab, ldq)
+#else
             CALL dgemm("N", "N", nal, mbl, nbl, fs, sab(1, 1), lds, cb(1, 1), ldb, 0.0_dp, qab, ldq)
+#endif
          ELSE
             CALL dgemm("T", "T", mbl, nal, nbl, fs, cb(1, 1), ldb, sab(1, 1), lds, 0.0_dp, qab, ldq)
          END IF
