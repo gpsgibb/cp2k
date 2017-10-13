@@ -184,6 +184,7 @@ endif
 ifneq (0,$(SYM))
   DFLAGS += -D__USE_CP2K_TRACE
   OPTFLAGS  += -traceback
+  LDFLAGS += -Wl,--export-dynamic
   ifneq (1,$(SYM))
     CXXFLAGS := -ggdb3 $(CXXFLAGS)
     CFLAGS := -ggdb3 $(CFLAGS)
