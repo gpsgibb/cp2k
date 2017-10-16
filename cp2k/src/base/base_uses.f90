@@ -69,6 +69,13 @@
 # define CP_COMMA_CONTIGUOUS
 #endif
 
+! LIBXSMM added a FORTRAN-suitable header file with macro definitions.
+! Allows macro-toggles in addition to parameters embedded into the module.
+!
+#if defined(__LIBXSMM)
+# include <libxsmm_config.h>
+#endif
+
 #if defined(__MKL)
 # define CP_MKL_PURE
 #else
