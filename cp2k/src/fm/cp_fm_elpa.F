@@ -137,20 +137,22 @@ CONTAINS
 
 #:def pick_macro(kernel_const)
 #! use Fypp's eval directive to hide ELPA flags from convention checker
-$: "#if defined(__ELPA)"
-$: "#  if defined(ELPA2_REAL_KERNEL_"+kernel_const+")"
-$: "     elpa_kernel = ELPA2_REAL_KERNEL_"+kernel_const
-$: "#  elif defined(ELPA_2STAGE_REAL_"+kernel_const+")"
-$: "     elpa_kernel = ELPA_2STAGE_REAL_"+kernel_const
-$: "#  else"
-$: "     CPABORT('"+kernel_const+" not available')"
-$: "#  endif"
+$: "#if defined(ELPA2_REAL_KERNEL_"+kernel_const+")"
+$: "  elpa_kernel = ELPA2_REAL_KERNEL_"+kernel_const
+$: "#elif defined(ELPA_C_2STAGE_REAL_"+kernel_const+")"
+$: "  elpa_kernel = ELPA_C_2STAGE_REAL_"+kernel_const
+$: "#elif defined(__ELPA)"
+$: "  elpa_kernel = ELPA_2STAGE_REAL_"+kernel_const
 $: "#else"
-$: "   CPABORT('"+kernel_const+" not available')"
+$: "  CPABORT('ELPA is not available')"
 $: "#endif"
 #:enddef
 
+#if (201611 > __ELPA)
+      SELECT CASE(MIN(kernel, 14))
+#else
       SELECT CASE(kernel)
+#endif
         CASE(1)
           elpa_kernel = -1 ! auto
         CASE(2)
@@ -185,6 +187,7 @@ $: "#endif"
 @:        pick_macro(AVX2_BLOCK4)
         CASE(15)
 @:        pick_macro(AVX2_BLOCK6)
+#if (201611 <= __ELPA)
         CASE(16)
 @:        pick_macro(AVX512_BLOCK2)
         CASE(17)
@@ -193,6 +196,7 @@ $: "#endif"
 @:        pick_macro(AVX512_BLOCK6)
         CASE(19)
 @:        pick_macro(GPU)
+#endif
         CASE DEFAULT
           CPABORT("Invalid ELPA kernel selected")
      END SELECT
