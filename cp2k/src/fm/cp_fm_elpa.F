@@ -137,12 +137,16 @@ CONTAINS
 
 #:def pick_macro(kernel_const)
 #! use Fypp's eval directive to hide ELPA flags from convention checker
-$: "#if defined(ELPA2_REAL_KERNEL_"+kernel_const+")"
-$: "   elpa_kernel = ELPA2_REAL_KERNEL_"+kernel_const
-$: "#elif defined(ELPA_C_2STAGE_REAL_"+kernel_const+")"
-$: "   elpa_kernel = ELPA_C_2STAGE_REAL_"+kernel_const
-$: "#elif defined(__ELPA)"
-$: "   elpa_kernel = ELPA_2STAGE_REAL_"+kernel_const
+$: "#if defined(__ELPA)"
+$: "#  if defined(ELPA2_REAL_KERNEL_"+kernel_const+")"
+$: "     elpa_kernel = ELPA2_REAL_KERNEL_"+kernel_const
+$: "#  elif defined(ELPA_2STAGE_REAL_"+kernel_const+")"
+$: "     elpa_kernel = ELPA_2STAGE_REAL_"+kernel_const
+$: "#  else"
+$: "     CPABORT('"+kernel_const+" not available')"
+$: "#  endif"
+$: "#else"
+$: "   CPABORT('"+kernel_const+" not available')"
 $: "#endif"
 #:enddef
 
