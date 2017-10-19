@@ -45,16 +45,7 @@ MODULE core_ppnl
                                               sap_sort
    USE virial_methods,                  ONLY: virial_pair_force
    USE virial_types,                    ONLY: virial_type
-#if defined(__LIBXSMM) && (2 < __LIBXSMM)
-   USE libxsmm,                         ONLY: LIBXSMM_MMBATCH_FLAG_SEQUENTIAL,&
-                                              LIBXSMM_MMBATCH_FLAG_STATISTIC,&
-                                              LIBXSMM_MMBATCH_FLAG_DEFAULT,&
-                                              LIBXSMM_GEMM_PRECISION_F64,&
-                                              LIBXSMM_GEMM_FLAG_NONE,&
-                                              libxsmm_mmbatch_begin,&
-                                              libxsmm_mmbatch_end
-   USE, INTRINSIC :: ISO_C_BINDING,     ONLY: C_LOC
-#endif
+
 !$ USE OMP_LIB, ONLY: omp_get_max_threads, omp_get_thread_num, omp_get_num_threads
 
 #include "./base/base_uses.f90"
@@ -124,7 +115,6 @@ CONTAINS
       LOGICAL                                            :: dogth, dokp, found, ppnl_present
       LOGICAL, DIMENSION(0:9)                            :: is_nonlocal
       REAL(KIND=dp)                                      :: dac, f0, ppnl_radius
-      REAL(KIND=dp), TARGET                              :: alpha1, beta0
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:)           :: radp
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:, :)        :: sab, work
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:, :, :)     :: ai_work
@@ -216,10 +206,7 @@ CONTAINS
                spotential(ikind)%sgp_potential => sgp_potential
             END IF
          END DO
-         !
-         alpha1 = 1.0_dp
-         beta0 = 0.0_dp
-         !
+
          nthread = 1
 !$       nthread = omp_get_max_threads()
 
@@ -228,7 +215,7 @@ CONTAINS
 !$OMP PARALLEL &
 !$OMP DEFAULT (NONE) &
 !$OMP SHARED  (nl_iterator, basis_set, gpotential, spotential, maxder, ncoset, &
-!$OMP          sap_int, nkind, ldsab, ldai, nder, nco, alpha1, beta0) &
+!$OMP          sap_int, nkind, ldsab, ldai, nder, nco ) &
 !$OMP PRIVATE (mepos, ikind, kkind, iatom, katom, nlist, ilist, nneighbor, jneighbor, &
 !$OMP          cell_c, rac, iac, first_sgfa, la_max, la_min, npgfa, nseta, nsgfa, nsgf_seta, &
 !$OMP          sphi_a, zeta, cprj, hprj, lppnl, nppnl, nprj_ppnl, &
@@ -334,16 +321,6 @@ CONTAINS
                   ! XXX fix, use correct bounds
                   prjc = 1
                   work = 0._dp
-#if defined(__LIBXSMM) && (2 < __LIBXSMM) && CP_VERSION4(1, 8, 1, 1024) <= \
-  CP_VERSION4(LIBXSMM_CONFIG_VERSION_MAJOR, LIBXSMM_CONFIG_VERSION_MINOR, \
-              LIBXSMM_CONFIG_VERSION_UPDATE, LIBXSMM_CONFIG_VERSION_PATCH)
-                  nprjc = nprj_ppnl(0) * nco(0)
-                  ncoc = ncoset(2*(nprj_ppnl(0)-1))
-!$OMP MASTER
-                  CALL libxsmm_mmbatch_begin(LIBXSMM_GEMM_PRECISION_F64, IOR(LIBXSMM_GEMM_FLAG_NONE, LIBXSMM_MMBATCH_FLAG_SEQUENTIAL), &
-                                             ncoa, nprjc, ncoc, SIZE(sab, 1), SIZE(cprj, 1), SIZE(work, 1), C_LOC(alpha1), C_LOC(beta0))
-!$OMP END MASTER
-#endif
                   DO l = 0, lppnl
                      nprjc = nprj_ppnl(l)*nco(l)
                      IF (nprjc == 0) CYCLE
@@ -365,13 +342,6 @@ CONTAINS
                      END DO
                      prjc = prjc+nprjc
                   END DO
-#if defined(__LIBXSMM) && (2 < __LIBXSMM) && CP_VERSION4(1, 8, 1, 1024) <= \
-  CP_VERSION4(LIBXSMM_CONFIG_VERSION_MAJOR, LIBXSMM_CONFIG_VERSION_MINOR, \
-              LIBXSMM_CONFIG_VERSION_UPDATE, LIBXSMM_CONFIG_VERSION_PATCH)
-!$OMP MASTER
-                  CALL libxsmm_mmbatch_end()
-!$OMP END MASTER
-#endif
                   DO i = 1, maxder
                      first_col = (i-1)*SIZE(work, 1)+1
                      ! *** Contraction step (basis functions) ***
@@ -495,7 +465,7 @@ CONTAINS
                            nb = SIZE(bcint, 1)
 !$OMP CRITICAL(h_block_critical)
                            IF (iatom <= jatom) THEN
-                              CALL dgemm("N", "T", na, nb, np, 1.0_dp, achint(1, 1, 1), na, &
+                              CALL dgemm("N", "T", na, nb, np, 1._dp, achint(1, 1, 1), na, &
                                          bcint(1, 1, 1), nb, 1.0_dp, h_block, SIZE(h_block, 1))
                            ELSE
                               CALL dgemm("N", "T", nb, na, np, 1.0_dp, bchint(1, 1, 1), nb, &
