@@ -132,7 +132,11 @@ void libxsmm_acc_reconfigure()
       const char *const diag_lib = "ELPA";
 # if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
       if (0 < elpa) {
+#   if (201611 <= __ELPA)
         const int cpuid = LIBXSMM_MIN(libxsmm_cpuid(), LIBXSMM_X86_AVX512);
+#   else // ensure to not request kernels beyond AVX2 with older ELPA
+        const int cpuid = LIBXSMM_MIN(libxsmm_cpuid(), LIBXSMM_X86_AVX2);
+#   endif
         if (LIBXSMM_X86_SSE3 <= cpuid) {
           const int k_elpa_base[] = { 6/*SSE3*/, 6/*SSE4*/, 9/*AVX*/, 12/*AVX2*/, 15/*AVX512*/ };
           const int block = LIBXSMM_MIN(elpa - 1, 2/*block6*/);
