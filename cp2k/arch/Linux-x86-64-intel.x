@@ -597,61 +597,78 @@ endif
 
 # filter-out override_limits flag since IFORT may run out of memory (SIGKILL)
 mp2_eri.o: mp2_eri.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -qoverride_limits,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 
 ifeq (1,$(shell echo $$((1 <= $(BEEP)))))
 mp2_optimize_ri_basis.o: mp2_optimize_ri_basis.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(FCFLAGS) -O0 -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
-qs_dispersion_nonloc.o: qs_dispersion_nonloc.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
-	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 helium_sampling.o: helium_sampling.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
-ifneq (0,$(OMP))
-minimax_exp_k53.o: minimax_exp_k53.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
-	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
-endif
+# not available in CP2K 4.1 (or earlier); uncomment if needed
+#qs_dispersion_nonloc.o: qs_dispersion_nonloc.F
+#	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+#	$(MAKE_FYPP)
+#	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
+#ifneq (0,$(OMP))
+#minimax_exp_k53.o: minimax_exp_k53.F
+#	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+#	$(MAKE_FYPP)
+#	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
+#endif
 endif
 
 # likely outdated or resolved
 ifeq (1,$(shell echo $$((2 <= $(BEEP)))))
 qs_vxc_atom.o: qs_vxc_atom.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 cp_fm_types.o: cp_fm_types.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 cube_utils.o: cube_utils.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 bibliography.o: bibliography.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(FCFLAGS) -O$(OPT2) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 ifneq (0,$(OMP))
 fast.o: fast.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 xc_tpss.o: xc_tpss.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 qs_integrate_potential_product.o: qs_integrate_potential_product.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 realspace_grid_types.o: realspace_grid_types.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -heap-arrays,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 matrix_exp.o: matrix_exp.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -heap-arrays,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 cp_dbcsr_operations.o: cp_dbcsr_operations.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -heap-arrays,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 dbcsr_util.o: dbcsr_util.F
-	$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
 	$(FC) -c $(filter-out -heap-arrays,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 endif
 endif
