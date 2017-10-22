@@ -61,7 +61,6 @@ DIAG_DISABLE = 8290,8291,10010,10212,10411,11060
 
 # DEFAULTS
 #
-BEEP ?= 1
 JIT ?= 1
 SSE ?= 0
 AVX ?= 0
@@ -80,6 +79,12 @@ MEMKIND ?= 1
 OFFLOAD ?= 0
 NESTED ?= 0
 ELPA ?= 201705
+
+# Workaround (see bottom of this file); disabled for older
+# versions of CP2K (use recommended toolchain!) due to
+# fypp preprocessed files, renamed translation units, etc.
+#
+BEEP ?= $(if $(wildcard $(TOOLSRC)/build_utils/fypp),1,0)
 
 # CP2K's configuation namespace (prefix)
 #
@@ -602,25 +607,24 @@ mp2_eri.o: mp2_eri.F
 	$(FC) -c $(filter-out -qoverride_limits,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 
 ifeq (1,$(shell echo $$((1 <= $(BEEP)))))
-mp2_optimize_ri_basis.o: mp2_optimize_ri_basis.F
-	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
-	$(MAKE_FYPP)
-	$(FC) -c $(FCFLAGS) -O0 -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
 helium_sampling.o: helium_sampling.F
 	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
 	$(MAKE_FYPP)
 	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
-# not available in CP2K 4.1 (or earlier); uncomment if needed
-#qs_dispersion_nonloc.o: qs_dispersion_nonloc.F
-#	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
-#	$(MAKE_FYPP)
-#	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
-#ifneq (0,$(OMP))
-#minimax_exp_k53.o: minimax_exp_k53.F
-#	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
-#	$(MAKE_FYPP)
-#	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
-#endif
+mp2_optimize_ri_basis.o: mp2_optimize_ri_basis.F
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
+	$(FC) -c $(FCFLAGS) -O0 -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
+qs_dispersion_nonloc.o: qs_dispersion_nonloc.F
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
+	$(FC) -c $(FCFLAGS) -O$(OPT1) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
+ifneq (0,$(OMP))
+minimax_exp_k53.o: minimax_exp_k53.F
+	$(eval MAKE_FYPP := $(if $(wildcard $(TOOLSRC)/build_utils/fypp),$(TOOLSRC)/build_utils/fypp $(FYPPFLAGS) $< $*.F90,$(NULL)))
+	$(MAKE_FYPP)
+	$(FC) -c $(filter-out -openmp -qopenmp -fopenmp,$(FCFLAGS)) -D__SHORT_FILE__="\"$(subst $(SRCDIR)/,,$<)\"" -I'$(dir $<)' $*.F90 $(FCLOGPIPE)
+endif
 endif
 
 # likely outdated or resolved
