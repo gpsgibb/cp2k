@@ -670,7 +670,7 @@ CONTAINS
          ! maybe tune if the current criterion is not good enough
          delta_n = nelectron-trace_fx
          ! condition: ABS(frob_id/frob_x) < SQRT(threshold) ...
-         IF (((frob_id * frob_id) < (threshold * frob_x * frob_x)) .AND. (ABS(delta_n) < 0.5_dp)) THEN
+         IF (((frob_id*frob_id) < (threshold*frob_x*frob_x)) .AND. (ABS(delta_n) < 0.5_dp)) THEN
             gam = 3.0_dp
          ELSE IF (ABS(delta_n) < 1e-14_dp) THEN
             gam = 0.0_dp ! rare case of perfect electron count
@@ -739,7 +739,7 @@ CONTAINS
          ! a branch of 1 or 2 appears to lead to a less accurate electron number count and premature exit
          ! if it turns out this does not exit because we get stuck in branch 1/2 for a reason we need to refine further
          ! condition: ABS(frob_id/frob_x) < SQRT(threshold) ...
-         IF ((frob_id * frob_id) < (threshold * frob_x * frob_x) .AND. branch == 3 .AND. (ABS(delta_n) < 0.5_dp)) THEN
+         IF ((frob_id*frob_id) < (threshold*frob_x*frob_x) .AND. branch == 3 .AND. (ABS(delta_n) < 0.5_dp)) THEN
             IF (PRESENT(converged)) converged = .TRUE.
             EXIT
          ENDIF
