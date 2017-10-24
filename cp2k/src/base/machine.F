@@ -75,9 +75,6 @@ FUNCTION m_walltime() RESULT (wt)
 #endif
       REAL(KIND=dp)                                      :: wt
 
-#if defined(__LIBXSMM)
-      wt = libxsmm_timer_duration(0, libxsmm_timer_tick())
-#else
       INTEGER(KIND=int_8)                                :: count
       INTEGER(KIND=int_8), SAVE                          :: count_max, count_rate, cycles = -1, &
                                                             last_count
