@@ -142,7 +142,7 @@ ifeq (1,$(shell echo $$((2 > $(DBG)))))
   else ifeq (3,$(AVX))
     ifeq (0,$(MIC))
       ifneq (file,$(origin MIC))
-        TARGET = -xCORE-AVX512
+        TARGET = -xCORE-AVX512 -qopt-zmm-usage=high
       else
         TARGET = -xCOMMON-AVX512
       endif
@@ -388,7 +388,7 @@ $(LIBXSMM_LIB): .state
 		BINDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/bin \
 		OUTDIR=$(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib \
 		JIT=$(JIT) MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
-		OMP=$(OMP) OPT=$(OPT) IPO=$(IPO) TARGET=$(TARGET) SSE=$(SSE) AVX=$(AVX) MIC=$(MIC) \
+		OMP=$(OMP) OPT=$(OPT) IPO=$(IPO) TARGET="$(TARGET)" SSE=$(SSE) AVX=$(AVX) MIC=$(MIC) \
 		MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD) SYM=$(SYM) DBG=$(DBG) WRAP=$(WRAP) INIT=0
 LIBXSMM_UPTODATE_CHECK := $(shell touch .state)
 # translation unit (dummy) which allows to consider LIBXSMM_LIB as dep. in general
@@ -574,6 +574,18 @@ ifneq (0,$(RECONFIGURE))
   DFLAGS  += -DCP2K_CONFIG_PREFIX=$(CONFIG_PREFIX)
   LDFLAGS += -Wl,--wrap=$(CONFIG_PREFIX)dbcsr_set_config_
   DIAG_DISABLE := $(DIAG_DISABLE),11021
+endif
+
+# check if the Intel Development Tools are available
+INTEL ?= $(shell echo "$$((2==$(words $(filter icpc icc, \
+  $(shell $(CXX) --version 2> /dev/null | head -n1 | cut -d' ' -f1) \
+  $(shell $(CC) --version 2> /dev/null | head -n1 | cut -d' ' -f1)))))")
+ifeq (0,$(INTEL))
+  $(info ================================================================================)
+  $(info This ARCH file relies on Intel Compiler and Libraries. Please try the following:)
+  $(info $$ source /opt/intel/compilers_and_libraries/linux/bin/compilervars.sh intel64)
+  $(info ================================================================================)
+  $(error Intel Development Tools not found!)
 endif
 
 DFLAGS  += -D__INTEL -D__HAS_ISO_C_BINDING
