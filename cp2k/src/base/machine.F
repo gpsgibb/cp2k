@@ -82,6 +82,9 @@ FUNCTION m_walltime() RESULT (wt)
       INTEGER(KIND=int_8), SAVE                          :: count_max, count_rate, cycles = -1, &
                                                             last_count
 
+#if defined(__LIBXSMM)
+      wt = libxsmm_timer_duration(0, libxsmm_timer_tick())
+#else
     !$ IF (.FALSE.) THEN
 ! count lies in [0,count_max] and increases monotonically
 
