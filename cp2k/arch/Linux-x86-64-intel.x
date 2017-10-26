@@ -134,6 +134,25 @@ ifneq (,$(strip $(FPFMODEL)))
   FPFMODEL := -fp-model $(FPFMODEL)
 endif
 
+CC_VERSION_STRING = $(shell $(CC) --version 2> /dev/null | head -n1 | sed "s/..* \([0-9][0-9]*\.[0-9][0-9]*\.*[0-9]*\)[ \S]*.*/\1/")
+CC_VERSION_MAJOR = $(shell echo "$(CC_VERSION_STRING)" | cut -d"." -f1)
+CC_VERSION_MINOR = $(shell echo "$(CC_VERSION_STRING)" | cut -d"." -f2)
+CC_VERSION_PATCH = $(shell echo "$(CC_VERSION_STRING)" | cut -d"." -f3)
+ifeq (3,$(words $(CC_VERSION_MAJOR) $(CC_VERSION_MINOR) $(CC_VERSION_PATCH)))
+  CC_VERSION = $(shell echo "$$(($(CC_VERSION_MAJOR) * 10000 + $(CC_VERSION_MINOR) * 100 + $(CC_VERSION_PATCH)))")
+else ifeq (2,$(words $(CC_VERSION_MAJOR) $(CC_VERSION_MINOR)))
+  CC_VERSION = $(shell echo "$$(($(CC_VERSION_MAJOR) * 10000 + $(CC_VERSION_MINOR) * 100))")
+  CC_VERSION_PATCH = 0
+else
+  CC_VERSION_STRING = $(NULL)
+  CC_VERSION = 0
+endif
+
+# workaround for certain bits introduced by GCC 7.0
+ifneq (0,$(shell echo "$$((180001 > $(CC_VERSION) && 0 != $(CC_VERSION)))"))
+  DFLAGS += -D_Float128=__float128
+endif
+
 ifeq (1,$(shell echo $$((2 > $(DBG)))))
   ifeq (1,$(AVX))
     TARGET = -xAVX
