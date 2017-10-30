@@ -42,7 +42,11 @@ ifneq (0,$(LIBXSMM))
   ifeq (,$(strip $(LIBXSMMROOT)))
     ifneq (,$(wildcard $(CP2KHOME)/../libxsmm/Makefile))
       LIBXSMMROOT = $(CP2KHOME)/../libxsmm
+    else ifneq (,$(wildcard $(CP2KHOME)/../libxsmm-master/Makefile))
+      LIBXSMMROOT = $(CP2KHOME)/../libxsmm
     else ifneq (,$(wildcard $(HOME)/libxsmm/Makefile))
+      LIBXSMMROOT = $(HOME)/libxsmm
+    else ifneq (,$(wildcard $(HOME)/libxsmm-master/Makefile))
       LIBXSMMROOT = $(HOME)/libxsmm
     else ifneq (,$(wildcard $(TOOLSRC)/toolchain/build/libxsmm*/Makefile))
       LIBXSMMROOT = $(dir $(wildcard $(TOOLSRC)/toolchain/build/libxsmm*/Makefile))
