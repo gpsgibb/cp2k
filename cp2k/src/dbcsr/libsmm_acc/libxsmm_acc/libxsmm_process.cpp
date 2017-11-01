@@ -203,7 +203,12 @@ private:
     static char trans = 'N';
     int im = static_cast<int>(m), in = static_cast<int>(n), ik = static_cast<int>(k), ildc = static_cast<int>(ldc);
 #if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
-    LIBXSMM_BLAS_GEMM_SYMBOL(float) // original symbol, which avoids to go through the wrapper
+    // original symbol, which avoids to go through the wrapper
+# if LIBXSMM_VERSION4(1, 8, 1, 1113) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#   LIBXSMM_ORIGINAL_GEMM(float)
+# else
+    LIBXSMM_BLAS_GEMM_SYMBOL(float)
+# endif
 #else
     LIBXSMM_ACC_FSYMBOL(sgemm)
 #endif
@@ -215,14 +220,18 @@ private:
     static char trans = 'N';
     int im = static_cast<int>(m), in = static_cast<int>(n), ik = static_cast<int>(k), ildc = static_cast<int>(ldc);
 #if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
-    LIBXSMM_BLAS_GEMM_SYMBOL(double) // original symbol, which avoids to go through the wrapper
+    // original symbol, which avoids to go through the wrapper
+# if LIBXSMM_VERSION4(1, 8, 1, 1113) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#   LIBXSMM_ORIGINAL_GEMM(double)
+# else
+    LIBXSMM_BLAS_GEMM_SYMBOL(double)
+# endif
 #else
     LIBXSMM_ACC_FSYMBOL(dgemm)
 #endif
       (&trans, &trans, &im, &in, &ik, &alpha, const_cast<double*>(a), &im, const_cast<double*>(b), &ik, &beta, c, &ildc);
   }
 };
-
 
 
 template<size_t N, typename T, typename U>
