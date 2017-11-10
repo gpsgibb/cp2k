@@ -365,12 +365,13 @@ ifneq (,$(LIBXSMMROOT))
   LIBXSMM ?= 1
   ifneq (0,$(LIBXSMM))
     LIBXSMM_LIB = $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmm.a
+    # always attempt to link libxsmmext (needed at least in case of WRAP)
+    LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
     # enable additional use cases for LIBXSMM
     ifeq (1,$(shell echo $$((1 < $(LIBXSMM)))))
       DFLAGS += -D__LIBXSMM_TRANS
       # substitute "big" xGEMM calls with LIBXSMM
       ifeq (1,$(shell echo $$((2 < $(LIBXSMM)))))
-        LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
         WRAP ?= 1
         ifeq (2,$(WRAP))
           LDFLAGS += -Wl,--wrap=dgemm_
@@ -410,9 +411,10 @@ $(LIBXSMM_LIB): .state
 		BLDDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/build \
 		BINDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/bin \
 		OUTDIR=$(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib \
-		JIT=$(JIT) MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
-		OMP=$(OMP) OPT=$(OPT) IPO=$(IPO) TARGET="$(TARGET)" SSE=$(SSE) AVX=$(AVX) MIC=$(MIC) \
-		MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD) SYM=$(SYM) DBG=$(DBG) WRAP=$(WRAP) INIT=0
+		INIT=0 WRAP=$(WRAP) JIT=$(JIT) SYM=$(SYM) DBG=$(DBG) \
+		MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
+		OPT=$(OPT) IPO=$(IPO) TARGET="$(TARGET)" SSE=$(SSE) AVX=$(AVX) MIC=$(MIC) \
+		MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD)
 LIBXSMM_UPTODATE_CHECK := $(shell touch .state)
 # translation unit (dummy) which allows to consider LIBXSMM_LIB as dep. in general
 # below hack is not triggering minimal rebuild but "good enough" (relink)
