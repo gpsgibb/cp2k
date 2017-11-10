@@ -367,6 +367,14 @@ ifneq (,$(LIBXSMMROOT))
     LIBXSMM_LIB = $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmm.a
     # always attempt to link libxsmmext (needed at least in case of WRAP)
     LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
+    # account for OpenMP-enabled libxsmmext routines
+    ifeq (0,$(OMP))
+      ifeq (1,$(MKL))
+        LIBS += -liomp5
+      else ifeq (0,$(MKL))
+        LIBS += -liomp5
+      endif
+    endif
     # enable additional use cases for LIBXSMM
     ifeq (1,$(shell echo $$((1 < $(LIBXSMM)))))
       DFLAGS += -D__LIBXSMM_TRANS
@@ -380,14 +388,6 @@ ifneq (,$(LIBXSMMROOT))
         endif
       else
         WRAP ?= 0
-      endif
-      # account for OpenMP-enabled wrapper routines
-      ifeq (0,$(OMP))
-        ifeq (1,$(MKL))
-          LIBS += -liomp5
-        else ifeq (0,$(MKL))
-          LIBS += -liomp5
-        endif
       endif
     else
       WRAP ?= 0
