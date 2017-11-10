@@ -364,9 +364,20 @@ endif
 ifneq (,$(LIBXSMMROOT))
   LIBXSMM ?= 1
   ifneq (0,$(LIBXSMM))
+    $(info ================================================================================)
+    $(info Automatically enabled LIBXSMM $(shell $(LIBXSMMROOT)/scripts/libxsmm_utilities.py 2> /dev/null))
+    $(info LIBXSMMROOT=$(LIBXSMMROOT))
+    $(info ================================================================================)
+    DFLAGS += -D__LIBXSMM=$(LIBXSMM)
+    # adjust CP2K configuration
+    DFLAGS += -D__HAS_smm_vec
+
     LIBXSMM_LIB = $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmm.a
     # always attempt to link libxsmmext (needed at least in case of WRAP)
     LIBS += $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmext.a
+    LIBS += $(LIBXSMM_LIB) $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmf.a
+    IFLAGS += -I$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/include
+
     # account for OpenMP-enabled libxsmmext routines
     ifeq (0,$(OMP))
       ifeq (1,$(MKL))
@@ -401,30 +412,15 @@ ifneq (,$(LIBXSMMROOT))
         LIBXSMM_MPSS := 1
       endif
     endif
-$(LIBXSMM_LIB): .state
-	$(info ================================================================================)
-	$(info Automatically enabled LIBXSMM $(shell $(LIBXSMMROOT)/scripts/libxsmm_utilities.py 2> /dev/null))
-	$(info LIBXSMMROOT=$(LIBXSMMROOT))
-	$(info ================================================================================)
-	@$(MAKE) --no-print-directory -f $(LIBXSMMROOT)/Makefile \
-		INCDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/include \
-		BLDDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/build \
-		BINDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/bin \
-		OUTDIR=$(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib \
-		INIT=0 WRAP=$(WRAP) JIT=$(JIT) SYM=$(SYM) DBG=$(DBG) \
-		MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
-		OPT=$(OPT) IPO=$(IPO) TARGET="$(TARGET)" SSE=$(SSE) AVX=$(AVX) MIC=$(MIC) \
-		MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD)
-LIBXSMM_UPTODATE_CHECK := $(shell touch .state)
-# translation unit (dummy) which allows to consider LIBXSMM_LIB as dep. in general
-# below hack is not triggering minimal rebuild but "good enough" (relink)
-$(SRCDIR)/base/base_uses.f90: $(LIBXSMM_LIB)
-ifneq (,$(wildcard $(LIBXSMM_LIB)))
-	@touch $(OBJDIR)/*.o
-endif
-    DFLAGS += -D__LIBXSMM=$(LIBXSMM)
-    IFLAGS += -I$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/include
-    LIBS += $(LIBXSMM_LIB) $(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib/libxsmmf.a
+    LIBXSMM_UPTODATE_CHECK := $(shell $(MAKE) --no-print-directory -f $(LIBXSMMROOT)/Makefile \
+      INCDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/include \
+      BLDDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/build \
+      BINDIR=$(MAINOBJDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/bin \
+      OUTDIR=$(MAINLIBDIR)/$(ARCH)/$(ONEVERSION)/libxsmm/lib \
+      INIT=0 WRAP=$(WRAP) JIT=$(JIT) SYM=$(SYM) DBG=$(DBG) \
+      MNK=$(LIBXSMM_MNK) M=$(LIBXSMM_M) N=$(LIBXSMM_N) K=$(LIBXSMM_K) PRECISION=2 \
+      OPT=$(OPT) IPO=$(IPO) TARGET="$(TARGET)" SSE=$(SSE) AVX=$(AVX) MIC=$(MIC) \
+      MPSS=$(LIBXSMM_MPSS) OFFLOAD=$(OFFLOAD))
   endif
 endif
 
