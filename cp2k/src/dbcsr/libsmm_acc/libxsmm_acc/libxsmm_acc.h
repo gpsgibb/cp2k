@@ -169,6 +169,7 @@
     ITYPE KIND accdrv_posterior_buffers DELIM \
     BTYPE KIND accdrv_avoid_after_busy DELIM \
     ITYPE KIND accdrv_min_flop_process DELIM \
+    BTYPE KIND accdrv_stack_sort DELIM \
     ITYPE KIND accdrv_min_flop_sort DELIM \
     BTYPE KIND accdrv_do_inhomogenous DELIM \
     ITYPE KIND accdrv_binning_nbins DELIM \
