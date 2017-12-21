@@ -129,7 +129,7 @@ void libxsmm_acc_reconfigure()
     int k_elpa = 1; // auto
 
     if (0 != elpa) {
-      const char *const diag_lib = "ELPA";
+      static const char *const diag_lib = "ELPA";
 # if LIBXSMM_VERSION4(1, 6, 3, 64) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
       if (0 < elpa) {
 #   if (201611 <= __ELPA)
