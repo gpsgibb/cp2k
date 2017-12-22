@@ -44,7 +44,7 @@ namespace libxsmm_process_private {
 /**
  * Below lock mechanism is only needed if processing matrix-stack is parallelized by itself.
  * This might be due to CP2K's ACCeleration layer, or due to a future implementation where
- * the (CPU-)codepath allows for nested parallelism.
+ * the (CPU-)code path allows for nested parallelism.
  */
 #if defined(LIBXSMM_ACC_OPENMP) && defined(LIBXSMM_ACC_SYNCHRONIZATION) && (1 < (LIBXSMM_ACC_SYNCHRONIZATION))
 LIBXSMM_ACC_RETARGETABLE class LIBXSMM_ACC_RETARGETABLE lock_type {
@@ -74,8 +74,8 @@ private:
  * This functor provides all services needed to perform a (Small)Matrix-Matrix multiplication.
  * The primary purpose is to uniform the different function signatures provided of the different
  * internal implementations. In particular it allows to operate LIBXSMM's SMM, but also providing
- * a fallback in case LIBXSMM is not present. Further if LIBXSMM is present, the internal
- * implementation might be pre-dispatched depending on attributes of the matrix-stack (def_mnk).
+ * a fall-back in case LIBXSMM is not present. Further if LIBXSMM is present, the internal
+ * implementation might be (pre-)dispatched depending on attributes of the matrix-stack (def_mnk).
  */
 template<typename T, typename U>
 class LIBXSMM_ACC_RETARGETABLE smm_type {
@@ -97,23 +97,28 @@ public:
     : m_predispatched((0 != def_mnk && (LIBXSMM_MAX_MNK) >= (m * n * k))
       ? xfunc_type(LIBXSMM_FLAGS, m, n, k, T(1)/*alpha*/, T(1)/*beta*/, LIBXSMM_PREFETCH)
       : xfunc_type())
-    , m_function(0 != m_predispatched ? smm_type::xmm/*pre-dispatched*/
+# if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 951) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, \
+                                                                             LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+    , m_function(0 != kernel().xmm ? smm_type::xmm/*(pre-)dispatched*/
+# else
+    , m_function(m_predispatched ? smm_type::xmm/*(pre-)dispatched*/
+# endif
       : ((LIBXSMM_MAX_MNK) >= (m * n * k) ? smm_type::amm : smm_type::bmm))
 #else
-    : m_predispatched(0), m_function(smm_type::bmm/*fallback if no LIBXSMM is present*/)
+    : m_predispatched(0), m_function(smm_type::bmm/*fall-back if no LIBXSMM is present*/)
 #endif
   {
     LIBXSMM_ACC_ASSERT(m_function);
   }
 
 public:
-#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 951) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 951) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, \
+                                                                             LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
   libxsmm_xmmfunction kernel() const { return m_predispatched.kernel(); }
+  bool efficient() const { return 0 != kernel().xmm; }
+#else
+  bool efficient() const { return 0 != m_predispatched; }
 #endif
-
-  bool efficient() const {
-    return 0 != m_predispatched;
-  }
 
   void zero_c(T *LIBXSMM_ACC_RESTRICT c, U size) const {
     LIBXSMM_ACC_PRAGMA_LOOP_COUNT(1, LIBXSMM_ACC_LOOP_MAX_M*LIBXSMM_ACC_LOOP_MAX_N, LIBXSMM_ACC_LOOP_AVG_M*LIBXSMM_ACC_LOOP_AVG_N)
@@ -202,9 +207,11 @@ private:
     static float alpha = 1.f, beta = 1.f;
     static char trans = 'N';
     int im = static_cast<int>(m), in = static_cast<int>(n), ik = static_cast<int>(k), ildc = static_cast<int>(ldc);
-#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, \
+                                                                           LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
     // original symbol, which avoids to go through the wrapper
-# if LIBXSMM_VERSION4(1, 8, 1, 1113) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+# if LIBXSMM_VERSION4(1, 8, 1, 1113) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, \
+                                                         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
     LIBXSMM_ORIGINAL_GEMM(float)
 # else
     LIBXSMM_BLAS_GEMM_SYMBOL(float)
@@ -219,9 +226,11 @@ private:
     static double alpha = 1.0, beta = 1.0;
     static char trans = 'N';
     int im = static_cast<int>(m), in = static_cast<int>(n), ik = static_cast<int>(k), ildc = static_cast<int>(ldc);
-#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 5, 0, 0) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, \
+                                                                           LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
     // original symbol, which avoids to go through the wrapper
-# if LIBXSMM_VERSION4(1, 8, 1, 1113) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+# if LIBXSMM_VERSION4(1, 8, 1, 1113) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, \
+                                                         LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
     LIBXSMM_ORIGINAL_GEMM(double)
 # else
     LIBXSMM_BLAS_GEMM_SYMBOL(double)
@@ -238,7 +247,8 @@ template<size_t N, typename T, typename U>
 LIBXSMM_ACC_RETARGETABLE void work(const U *LIBXSMM_ACC_RESTRICT stack, size_t stacksize, const smm_type<T,U>& smm,
   const T *LIBXSMM_ACC_RESTRICT a, const T *LIBXSMM_ACC_RESTRICT b, T *LIBXSMM_ACC_RESTRICT c)
 {
-#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 1169) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
+#if defined(__LIBXSMM) && LIBXSMM_VERSION4(1, 8, 1, 1169) <= LIBXSMM_VERSION4(LIBXSMM_VERSION_MAJOR, LIBXSMM_VERSION_MINOR, \
+                                                                              LIBXSMM_VERSION_UPDATE, LIBXSMM_VERSION_PATCH)
   if (0 != smm.kernel().xmm) {
     const libxsmm_blasint *const params = reinterpret_cast<const libxsmm_blasint*>(stack);
     LIBXSMM_ACC_ASSERT(sizeof(U) == sizeof(libxsmm_blasint));
@@ -425,7 +435,7 @@ const libxstream_function libxsmm_process_function = reinterpret_cast<libxstream
 extern "C" int libsmm_acc_process(void* param_stack, int stacksize, int nparams, int datatype, void* a_data, void* b_data, void* c_data, int max_m, int max_n, int max_k, int def_mnk, void* stream_or_boolean)
 {
 #if defined(LIBXSMM_ACC_PRETRANSPOSE)
-  LIBXSMM_ACC_ASSERT(false/*TODO: implement C = A * B which is assuming that B is pre-transposed (B^T).*/);
+  LIBXSMM_ACC_ASSERT(false/*TODO: implement C = A * B which is assuming that B is (pre-)transposed (B^T).*/);
 #endif
 #if defined(CP2K_CONFIG_PREFIX) && defined(__ACC) && defined(__ACC_MIC) && defined(__DBCSR_ACC) && defined(__LIBXSTREAM)
   const int mflops = 0 != stream_or_boolean ? static_cast<int>(2E-6 * stacksize * max_m * max_n * max_k + 0.5) : LIBXSMM_ACC_ACCDRV_MIN_MFLOPS_PERSTACK;
