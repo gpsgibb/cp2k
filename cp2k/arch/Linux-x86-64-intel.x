@@ -90,7 +90,7 @@ ELPA ?= 201705
 #
 BEEP ?= $(if $(wildcard $(TOOLSRC)/build_utils/fypp),1,0)
 
-# CP2K's configuation namespace (prefix)
+# CP2K's configuration namespace (prefix)
 #
 CONFIG_PREFIX = dbcsr_config_mp_
 
@@ -434,7 +434,7 @@ ifneq (0,$(ACC))
       LDFLAGS += -qoffload-option,mic,ld,"--unresolved-symbols=ignore-all"
     else # also true if OFFLOAD is undefined
       #OPTFLAGS += -qoffload=mandatory
-      # enable OpenMP for OFFLOAD regardless of wether OMP is enabled or not
+      # enable OpenMP for OFFLOAD regardless of whether OMP is enabled or not
       MIC_CXFLAGS += -qopenmp -qno-openmp -qoffload-option,mic,compiler,"-qopenmp"
       MIC_CCFLAGS += -qopenmp -qno-openmp -qoffload-option,mic,compiler,"-qopenmp"
       MIC_FCFLAGS += -qopenmp -qno-openmp -qoffload-option,mic,compiler,"-qopenmp"
