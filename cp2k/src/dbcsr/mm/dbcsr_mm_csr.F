@@ -462,7 +462,7 @@ CONTAINS
 ! **************************************************************************************************
    SUBROUTINE dbcsr_mm_csr_init(this, left, right, product, &
                                 m_sizes, n_sizes, block_estimate, right_row_blk_size, &
-                                nlayers)
+                                nlayers, ithread)
       TYPE(dbcsr_mm_csr_type), INTENT(INOUT)             :: this
       TYPE(dbcsr_type), INTENT(IN), OPTIONAL             :: left, right
       TYPE(dbcsr_type), INTENT(INOUT)                    :: product
@@ -470,11 +470,12 @@ CONTAINS
       INTEGER, INTENT(IN)                                :: block_estimate
       INTEGER, DIMENSION(:), INTENT(IN)                  :: right_row_blk_size
       INTEGER, OPTIONAL                                  :: nlayers
+      INTEGER, INTENT(IN)                                :: ithread
 
       CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_mm_csr_init', &
          routineP = moduleN//':'//routineN
 
-      INTEGER                                            :: default_stack, handle, istack, ithread, &
+      INTEGER                                            :: default_stack, handle, istack, &
                                                             k_map, k_size, m_map, m_size, n_map, &
                                                             n_size, nstacks, nthreads, ps_g
       INTEGER, ALLOCATABLE, DIMENSION(:)                 :: flop_index, flop_list, most_common_k, &
@@ -484,8 +485,8 @@ CONTAINS
 
       CALL timeset(routineN, handle)
 
-      ithread = 0; nthreads = 1
-!$    ithread = OMP_GET_THREAD_NUM(); nthreads = OMP_GET_NUM_THREADS()
+      !ithread = 0; nthreads = 1
+!!$    ithread = OMP_GET_THREAD_NUM(); nthreads = OMP_GET_NUM_THREADS()
 
       IF (PRESENT(left) .NEQV. PRESENT(right)) &
          CPABORT("Must both left and right provided or not.")
@@ -625,7 +626,7 @@ CONTAINS
          ENDDO
       ENDDO
       DEALLOCATE (flop_list, flop_index, tmp_descr)
-
+      PRINT *, "csr_init: ithread=",ithread
       this%product_wm => product%wms(ithread+1)
       CALL dbcsr_mm_sched_init(this%sched, &
                                product_wm=this%product_wm, &

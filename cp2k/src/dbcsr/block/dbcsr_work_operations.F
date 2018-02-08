@@ -1582,6 +1582,8 @@ CONTAINS
       ! among themselves.
       all_row_p(which_wm)%p => my_row_p
       all_data_sizes(which_wm) = wm_datasize
+!$ print *, omp_get_thread_num(),wm%datasize,dbcsr_data_get_size_referenced(wm%data_area)
+!$OMP BARRIER
       IF (.NOT. sort_data) THEN
          IF (wm_datasize > dbcsr_data_get_size_referenced(wm%data_area)) &
             CPABORT("Data size mismatch.")

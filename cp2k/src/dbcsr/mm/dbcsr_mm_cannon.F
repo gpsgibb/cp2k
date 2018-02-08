@@ -705,6 +705,7 @@ CONTAINS
             blk = blks(row_img, col_img)
             blks(row_img, col_img) = blks(row_img, col_img)+1
             blk_ps(row_img, col_img) = blk_ps(row_img, col_img)+nze
+print*, blk_l,row_img,col_img,blk,stored_row
             ums%mats(row_img, col_img)%wms(1)%row_i(blk) = stored_row
             ums%mats(row_img, col_img)%wms(1)%col_i(blk) = stored_col
             ums%mats(row_img, col_img)%wms(1)%blk_p(blk) = &
@@ -1312,6 +1313,8 @@ CONTAINS
       ALLOCATE (n_sizes(dbcsr_nblkcols_local(product_matrix)))
       CALL local_filter(array_data(product_matrix%col_blk_size), array_size(product_matrix%local_cols), &
                         array_data(product_matrix%local_cols), n_sizes)
+
+      print*, "About to allocate multrec and call multrec_init"
       !
 !$OMP PARALLEL &
 !$OMP DEFAULT (NONE) &
@@ -1323,6 +1326,7 @@ CONTAINS
 !$OMP PRIVATE(ithread)
       ithread = 0
 !$    ithread = OMP_GET_THREAD_NUM()
+!$OMP MASTER
       ALLOCATE (multrec(ithread)%p)
       CALL dbcsr_mm_multrec_init(multrec(ithread)%p, &
                                  left_buffer_comm%mats(1, 1), &
@@ -1336,7 +1340,9 @@ CONTAINS
                                                     right_buffer_comm%mats(1, 1)%nblks)/nthreads, &
                                  right_row_blk_size=array_data(right_buffer_comm%mats(1, 1)%row_blk_size), &
                                  m_sizes=m_sizes, n_sizes=n_sizes)
+!$OMP END MASTER
 !$OMP END PARALLEL
+print*, "multrec_init done :)"
       !
       ! Setup indexing
       CALL setup_rec_index_2d(left_set, left_row_nimages, left_col_nimages)
@@ -1688,23 +1694,32 @@ CONTAINS
 !$OMP REDUCTION (+: flop_single)
             ithread = 0; nthreads = 1
 !$          ithread = omp_get_thread_num(); nthreads = omp_get_num_threads()
-
+!$OMP MASTER
             IF (metronome == nsteps_k .AND. v_ki == min_nimages-1) &
                CALL dbcsr_mm_multrec_phaseout(multrec(ithread)%p)
-!$OMP BARRIER
+!!$OMP BARRIER
             CALL timeset(routineN//"_multrec", handle2)
+            !$ print *, "I am the master thread and I am thread number",omp_get_thread_num()
+!$OMP END MASTER
 
-            CALL dbcsr_mm_multrec_multiply(multrec(ithread)%p, &
+            CALL dbcsr_mm_multrec_multiply(multrec(0)%p, &
                                            left=left_buffer_calc%mats(1, v_ki+1), &
                                            right=right_buffer_calc%mats(v_ki+1, 1), &
                                            flop=flop_single, &
                                            a_norms=left_norms, b_norms=right_norms, &
                                            k_sizes=k_sizes)
 
+!$OMP TASKWAIT
+!$OMP BARRIER
+
+!$OMP MASTER
             IF (metronome == nsteps_k .AND. v_ki == min_nimages-1) THEN
                CALL dbcsr_mm_multrec_finalize(multrec(ithread)%p)
                DEALLOCATE (multrec(ithread)%p)
             ENDIF
+!$OMP END MASTER
+
+!$OMP BARRIER
 
 !$OMP ATOMIC
             threads_finished = threads_finished+1

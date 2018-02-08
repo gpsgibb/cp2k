@@ -14,6 +14,7 @@
 !>  - 2011-11    Moved parameter-stack processing routines to
 !>               dbcsr_mm_methods.
 !>  - 2013-01    extensive refactoring (Ole Schuett)
+!>  - 2017-09    Altered threading model to task-based parallelisation (Gordon Gibb)
 ! **************************************************************************************************
 
 MODULE dbcsr_mm_multrec
@@ -53,6 +54,9 @@ MODULE dbcsr_mm_multrec
 
    CHARACTER(len=*), PARAMETER, PRIVATE :: moduleN = 'dbcsr_mm_multrec'
    LOGICAL, PARAMETER :: careful_mod = .FALSE.
+   TYPE product_wm_ptr
+         TYPE(dbcsr_work_type), POINTER :: ptr => Null()
+   END TYPE
 
 ! **************************************************************************************************
 !> \brief Used to carry data among the various calls.  Each thread has
@@ -118,10 +122,10 @@ MODULE dbcsr_mm_multrec
 
       REAL(KIND=sp), DIMENSION(:), POINTER :: row_max_epss, a_norms, b_norms
       REAL(KIND=real_8)     :: eps
-      INTEGER               :: original_lastblk
+      INTEGER, allocatable, dimension(:)               :: original_lastblk
       INTEGER(kind=int_8)   :: flop
-      TYPE(dbcsr_work_type), POINTER :: product_wm => Null()
-      TYPE(dbcsr_mm_csr_type)        :: csr
+      Type(product_wm_ptr), allocatable, dimension(:) :: product_wm
+      TYPE(dbcsr_mm_csr_type), allocatable, dimension(:)    :: csr
       LOGICAL                        :: new_row_max_epss = .FALSE.
       LOGICAL                        :: initialized = .FALSE.
    END TYPE dbcsr_mm_multrec_type
@@ -195,17 +199,19 @@ CONTAINS
       LOGICAL, PARAMETER                                 :: dbg = .FALSE.
 
       INTEGER                                            :: c_nblkcols_local, c_nblkrows_local, &
-                                                            handle, ithread
+                                                            handle, ithread, nthreads
       INTEGER, DIMENSION(:), POINTER                     :: c_local_cols, c_local_rows
 
 !$    INTEGER, DIMENSION(:), POINTER           :: product_thread_dist
-
+integer :: i
 !   ---------------------------------------------------------------------------
 
       CALL timeset(routineN, handle)
 
+      nthreads = 1
       ithread = 0
 !$    ithread = OMP_GET_THREAD_NUM()
+!$    nthreads= OMP_GET_NUM_THREADS()
       !
       IF (this%initialized) &
          CPABORT("multrec already initialized.")
@@ -232,9 +238,18 @@ CONTAINS
       this%keep_sparsity = keep_sparsity
       this%c_has_symmetry = product%symmetry
       this%use_eps = PRESENT(eps)
-      this%original_lastblk = product%wms(ithread+1)%lastblk
+      allocate(this%original_lastblk(0:nthreads-1))
+      do i=0,nthreads-1
+        this%original_lastblk(i) = product%wms(i+1)%lastblk
+      enddo
       this%flop = INT(0, int_8)
-      this%product_wm => product%wms(ithread+1)
+      allocate(this%product_wm(0:nthreads-1))
+     do i=0,nthreads-1
+        print *, "setting work matrix pointer for thread", i
+        !this%product_wm => product%wms(ithread+1)
+        this%product_wm(i)%ptr => product%wms(i+1)
+     enddo
+
 
       IF (PRESENT(eps)) THEN
          this%eps = eps
@@ -301,13 +316,24 @@ CONTAINS
       NULLIFY (this%k_locals)
       NULLIFY (this%k_sizes)
 
-      !TODO: should we move this up?
-      CALL dbcsr_mm_csr_init(this%csr, &
-                             left=left, right=right, product=product, &
-                             m_sizes=this%m_sizes, n_sizes=this%n_sizes, &
-                             block_estimate=block_estimate, &
-                             right_row_blk_size=right_row_blk_size, &
-                             nlayers=nlayers)
+      nthreads = 1
+      ithread = 0
+!$    ithread = OMP_GET_THREAD_NUM()
+!$    nthreads= OMP_GET_NUM_THREADS()
+
+  allocate (this%csr(0:nthreads-1))
+    print*, "multrec_init",ithread, nthreads
+
+
+    DO i=0,nthreads-1
+          print *, "i=",i," ithread=",omp_get_thread_num(),"initialising CSR"
+          CALL dbcsr_mm_csr_init(this%csr(i), &
+                                 left=left, right=right, product=product, &
+                                 m_sizes=this%m_sizes, n_sizes=this%n_sizes, &
+                                 block_estimate=block_estimate, &
+                                 right_row_blk_size=right_row_blk_size, &
+                                 nlayers=nlayers,ithread=i)
+    ENDDO
 
       this%initialized = .TRUE.
       CALL timestop(handle)
@@ -341,14 +367,20 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_mm_multrec_multiply', &
          routineP = moduleN//':'//routineN
 
-!$    INTEGER                                            :: ithread
+      INTEGER                                            :: ithread, nthreads
       INTEGER                                            :: t_a_f, t_a_l, t_b_f, t_b_l
       INTEGER, DIMENSION(:), POINTER                     :: k_locals
+      integer :: d, i
 
 !   ---------------------------------------------------------------------------
 
       IF (.NOT. this%initialized) &
          CPABORT("multrec not initialized.")
+
+         ithread=0
+          !$ ithread = OMP_GET_THREAD_NUM()
+
+!$OMP MASTER
 
       this%flop = 0
 
@@ -361,27 +393,59 @@ CONTAINS
       this%a_norms => a_norms
       this%b_norms => b_norms
 
+      !$ nthreads=omp_get_num_threads()
+
+
       ! Start local multiplication
       t_a_f = 1
       t_a_l = left%nblks
       t_b_f = 1
       t_b_l = right%nblks
-!$    IF (ASSOCIATED(left%thr_c)) THEN
-!$       ithread = OMP_GET_THREAD_NUM()
-!$       t_a_f = left%thr_c(ithread+1)+1
-!$       t_a_l = left%thr_c(ithread+2)
-!$    ENDIF
+
+      ithread=0
+!!$    IF (ASSOCIATED(left%thr_c)) THEN
+!!$       ithread = OMP_GET_THREAD_NUM()
+!!$       t_a_f = left%thr_c(ithread+1)+1
+!!$       t_a_l = left%thr_c(ithread+2)
+!!$    ENDIF
+open (unit=20,file="TASKRANGES")
+open (unit=30,file="csrmultiplythreads")
+
+      d=0
+      !$OMP TASKGROUP
       CALL sparse_multrec(this, left, right, &
                           1, left%nblkrows_local, &
                           1, right%nblkcols_local, &
                           1, SIZE(k_locals), &
                           t_a_f, t_a_l, left%coo_l, &
                           t_b_f, t_b_l, right%coo_l, &
-                          0)
+                          d)
+      !$OMP END TASKGROUP
 
-      CALL dbcsr_mm_csr_purge_stacks(this%csr, left, right)
+print *, "Sparse multrec done"
+
+!$OMP END MASTER
+
+!$OMP TASKWAIT
+!$OMP BARRIER
+
+!$OMP Master
+close (20)
+close(30)
+!$OMP END MASTER
+
+!$ ithread=omp_get_thread_num()
+print*, "ithread=",ithread
+      CALL dbcsr_mm_csr_purge_stacks(this%csr(ithread), left, right)
+
+!$OMP BARRIER
+
+!$OMP MASTER
 
       flop = flop+this%flop
+!$OMP END MASTER
+
+!$OMP BARRIER
       !
    END SUBROUTINE dbcsr_mm_multrec_multiply
 
@@ -392,8 +456,12 @@ CONTAINS
 ! **************************************************************************************************
    SUBROUTINE dbcsr_mm_multrec_phaseout(this)
       TYPE(dbcsr_mm_multrec_type), INTENT(INOUT)         :: this
+      integer :: ithread
 
-      CALL dbcsr_mm_csr_phaseout(this%csr)
+            ithread=0
+      !$      ithread=omp_get_thread_num()
+
+            CALL dbcsr_mm_csr_phaseout(this%csr(ithread))
    END SUBROUTINE dbcsr_mm_multrec_phaseout
 
 ! **************************************************************************************************
@@ -404,12 +472,16 @@ CONTAINS
 ! **************************************************************************************************
    SUBROUTINE dbcsr_mm_multrec_dev2host_init(this)
       TYPE(dbcsr_mm_multrec_type), INTENT(inout)         :: this
+      integer :: ithread
 
-!   ---------------------------------------------------------------------------
+  !   ---------------------------------------------------------------------------
+
+  ithread=0
+  !$ ithread=omp_get_thread_num()
 
       IF (.NOT. this%initialized) &
          CPABORT("multrec not initialized.")
-      CALL dbcsr_mm_csr_dev2host_init(this%csr)
+      CALL dbcsr_mm_csr_dev2host_init(this%csr(ithread))
    END SUBROUTINE dbcsr_mm_multrec_dev2host_init
 
 ! **************************************************************************************************
@@ -429,6 +501,8 @@ CONTAINS
 
       INTEGER                                            :: handle, ithread, lb_meta, &
                                                             nblocks, nthreads, ub_meta
+      integer :: i
+
 
 !   ---------------------------------------------------------------------------
 
@@ -436,7 +510,15 @@ CONTAINS
       IF (.NOT. this%initialized) &
          CPABORT("multrec not initialized.")
 
-      CALL dbcsr_mm_csr_finalize(this%csr)
+         ithread=0
+         !$ ithread=OMP_GET_THREAD_NUM()
+         nthreads=1
+         !$ nthreads=omp_get_num_threads()
+
+         do i=0,nthreads-1
+           print *, "Finalizing CSR for thread",i, " of",nthreads
+           CALL dbcsr_mm_csr_finalize(this%csr(i))
+         enddo
 
       ! Release the carrier
       IF (this%new_row_max_epss) DEALLOCATE (this%row_max_epss)
@@ -445,27 +527,33 @@ CONTAINS
          ithread = 0; nthreads = 1
 !$       ithread = OMP_GET_THREAD_NUM(); nthreads = OMP_GET_NUM_THREADS()
          ! Copy wms data into matrix
-         lb_meta = meta_buffer(ithread+1)
-         nblocks = (meta_buffer(ithread+2)-lb_meta)/3
-         ub_meta = lb_meta+nblocks
-         meta_buffer(lb_meta+1:ub_meta) = this%product_wm%row_i(1:nblocks)
-         lb_meta = ub_meta
-         ub_meta = lb_meta+nblocks
-         meta_buffer(lb_meta+1:ub_meta) = this%product_wm%col_i(1:nblocks)
-         lb_meta = ub_meta
-         ub_meta = lb_meta+nblocks
-         meta_buffer(lb_meta+1:ub_meta) = this%product_wm%blk_p(1:nblocks)
+         do ithread=0,nthreads-1
+             lb_meta = meta_buffer(ithread+1)
+             nblocks = (meta_buffer(ithread+2)-lb_meta)/3
+             ub_meta = lb_meta+nblocks
+             meta_buffer(lb_meta+1:ub_meta) = this%product_wm(ithread)%ptr%row_i(1:nblocks)
+             lb_meta = ub_meta
+             ub_meta = lb_meta+nblocks
+             meta_buffer(lb_meta+1:ub_meta) = this%product_wm(ithread)%ptr%col_i(1:nblocks)
+             lb_meta = ub_meta
+             ub_meta = lb_meta+nblocks
+             meta_buffer(lb_meta+1:ub_meta) = this%product_wm(ithread)%ptr%blk_p(1:nblocks)
+         enddo
       ELSE
-         CALL remap_local2global(this%product_wm%row_i, &
-                                 this%product_wm%col_i, &
-                                 this%c_local_rows, this%c_local_cols, &
-                                 this%original_lastblk+1, this%product_wm%lastblk)
+          do ithread=0,nthreads-1
+             CALL remap_local2global(this%product_wm(ithread)%ptr%row_i, &
+                                     this%product_wm(ithread)%ptr%col_i, &
+                                     this%c_local_rows, this%c_local_cols, &
+                                     this%original_lastblk(ithread)+1, this%product_wm(ithread)%ptr%lastblk)
+          enddo
 
          ! if filtering is requested remove small blocks, unless the sparsity needs to be kept
          IF (this%use_eps .AND. .NOT. this%keep_sparsity) THEN
             CALL multrec_filtering(this)
          ELSE
-            this%product_wm%datasize_after_filtering = this%product_wm%datasize
+            do ithread=0,nthreads-1
+                this%product_wm(ithread)%ptr%datasize_after_filtering = this%product_wm(ithread)%ptr%datasize
+            enddo
          ENDIF
       ENDIF
 
@@ -483,49 +571,56 @@ CONTAINS
          routineP = moduleN//':'//routineN
 
       INTEGER                                            :: handle
+      integer :: ithread, nthreads
+
+      ithread=0
+      nthreads=1
+      !$ nthreads=omp_get_num_threads()
 
       CALL timeset(routineN, handle)
 
-      SELECT CASE (this%product_wm%data_area%d%data_type)
-      CASE (dbcsr_type_real_4)
-         CALL multrec_filtering_s(this%eps, &
-              this%product_wm%lastblk, &
-              this%product_wm%row_i, &
-              this%product_wm%col_i, &
-              this%product_wm%blk_p, &
-              this%m_global_sizes, this%n_global_sizes, &
-              this%product_wm%datasize_after_filtering, &
-              this%product_wm%data_area%d%r_sp)
-      CASE (dbcsr_type_real_8)
-         CALL multrec_filtering_d(this%eps, &
-              this%product_wm%lastblk, &
-              this%product_wm%row_i, &
-              this%product_wm%col_i, &
-              this%product_wm%blk_p, &
-              this%m_global_sizes, this%n_global_sizes, &
-              this%product_wm%datasize_after_filtering, &
-              this%product_wm%data_area%d%r_dp)
-      CASE (dbcsr_type_complex_4)
-         CALL multrec_filtering_c(this%eps, &
-              this%product_wm%lastblk, &
-              this%product_wm%row_i, &
-              this%product_wm%col_i, &
-              this%product_wm%blk_p, &
-              this%m_global_sizes, this%n_global_sizes, &
-              this%product_wm%datasize_after_filtering, &
-              this%product_wm%data_area%d%c_sp)
-      CASE (dbcsr_type_complex_8)
-         CALL multrec_filtering_z(this%eps, &
-              this%product_wm%lastblk, &
-              this%product_wm%row_i, &
-              this%product_wm%col_i, &
-              this%product_wm%blk_p, &
-              this%m_global_sizes, this%n_global_sizes, &
-              this%product_wm%datasize_after_filtering, &
-              this%product_wm%data_area%d%c_dp)
-      CASE DEFAULT
-         CPABORT("Invalid data type.")
-      END SELECT
+      do ithread=0,nthreads-1
+          SELECT CASE (this%product_wm(ithread)%ptr%data_area%d%data_type)
+          CASE (dbcsr_type_real_4)
+             CALL multrec_filtering_s(this%eps, &
+                  this%product_wm(ithread)%ptr%lastblk, &
+                  this%product_wm(ithread)%ptr%row_i, &
+                  this%product_wm(ithread)%ptr%col_i, &
+                  this%product_wm(ithread)%ptr%blk_p, &
+                  this%m_global_sizes, this%n_global_sizes, &
+                  this%product_wm(ithread)%ptr%datasize_after_filtering, &
+                  this%product_wm(ithread)%ptr%data_area%d%r_sp)
+          CASE (dbcsr_type_real_8)
+             CALL multrec_filtering_d(this%eps, &
+                  this%product_wm(ithread)%ptr%lastblk, &
+                  this%product_wm(ithread)%ptr%row_i, &
+                  this%product_wm(ithread)%ptr%col_i, &
+                  this%product_wm(ithread)%ptr%blk_p, &
+                  this%m_global_sizes, this%n_global_sizes, &
+                  this%product_wm(ithread)%ptr%datasize_after_filtering, &
+                  this%product_wm(ithread)%ptr%data_area%d%r_dp)
+          CASE (dbcsr_type_complex_4)
+             CALL multrec_filtering_c(this%eps, &
+                  this%product_wm(ithread)%ptr%lastblk, &
+                  this%product_wm(ithread)%ptr%row_i, &
+                  this%product_wm(ithread)%ptr%col_i, &
+                  this%product_wm(ithread)%ptr%blk_p, &
+                  this%m_global_sizes, this%n_global_sizes, &
+                  this%product_wm(ithread)%ptr%datasize_after_filtering, &
+                  this%product_wm(ithread)%ptr%data_area%d%c_sp)
+          CASE (dbcsr_type_complex_8)
+             CALL multrec_filtering_z(this%eps, &
+                  this%product_wm(ithread)%ptr%lastblk, &
+                  this%product_wm(ithread)%ptr%row_i, &
+                  this%product_wm(ithread)%ptr%col_i, &
+                  this%product_wm(ithread)%ptr%blk_p, &
+                  this%m_global_sizes, this%n_global_sizes, &
+                  this%product_wm(ithread)%ptr%datasize_after_filtering, &
+                  this%product_wm(ithread)%ptr%data_area%d%c_dp)
+          CASE DEFAULT
+             CPABORT("Invalid data type.")
+          END SELECT
+      enddo
 
       CALL timestop(handle)
 
@@ -552,15 +647,19 @@ CONTAINS
          routineP = moduleN//':'//routineN
 
       INTEGER                                            :: handle
+      integer :: ithread
+
+      ithread=0
+      !$ ithread=omp_get_thread_num()
 
       CALL timeset(routineN, handle)
       IF (.NOT. this%initialized) &
          CPABORT("multrec not initialized.")
-      CALL dbcsr_mm_csr_red3D(this%csr, meta_buffer, data_buffer, flop, &
+      CALL dbcsr_mm_csr_red3D(this%csr(ithread), meta_buffer, data_buffer, flop, &
                               m_sizes=this%m_sizes, n_sizes=this%n_sizes, &
                               g2l_map_rows=g2l_map_rows, &
                               g2l_map_cols=g2l_map_cols, &
-                              original_lastblk=this%original_lastblk, &
+                              original_lastblk=this%original_lastblk(ithread), &
                               keep_sparsity=this%keep_sparsity)
       CALL timestop(handle)
    END SUBROUTINE dbcsr_mm_multrec_red3D
@@ -574,8 +673,13 @@ CONTAINS
    FUNCTION dbcsr_mm_multrec_get_nblks(this) RESULT(nblks)
       TYPE(dbcsr_mm_multrec_type), INTENT(IN)            :: this
       INTEGER                                            :: nblks
+      integer :: ithread
 
-      nblks = this%product_wm%lastblk
+            ithread=0
+            !$ ithread=omp_get_thread_num()
+
+            nblks = this%product_wm(ithread)%ptr%lastblk
+
 
    END FUNCTION dbcsr_mm_multrec_get_nblks
 
@@ -588,8 +692,12 @@ CONTAINS
    FUNCTION dbcsr_mm_multrec_get_nze(this) RESULT(nze)
       TYPE(dbcsr_mm_multrec_type), INTENT(IN)            :: this
       INTEGER                                            :: nze
+      integer :: ithread
 
-      nze = this%product_wm%datasize
+           ithread=0
+           !$ ithread=omp_get_thread_num()
+
+           nze = this%product_wm(ithread)%ptr%datasize
 
    END FUNCTION dbcsr_mm_multrec_get_nze
 
@@ -628,81 +736,147 @@ CONTAINS
       LOGICAL, PARAMETER                                 :: dbg = .FALSE.
 
       INTEGER                                            :: acut, bcut, cut, K, M, N, s1
+      INTEGER :: ithread, nthreads, d2
+      logical :: condition
+      integer :: mf1, mi2, acut1, acut2, nf1, ni2, bcut1, bcut2
+      !   ---------------------------------------------------------------------------
 
-!   ---------------------------------------------------------------------------
+      ithread=0
+      !$ ithread=OMP_GET_THREAD_NUM()
+      nthreads=1
+      !$ nthreads=omp_get_num_threads()
 
-      IF (dbg) THEN
-         WRITE (*, '(I7,1X,5(A,2(1X,I7)))') d, " rm", mi, mf, ",", ni, nf, ",", ki, kf, "/", ai, af, ",", bi, bf
-      ENDIF
-      IF (.TRUE.) THEN
-         IF (af .LT. ai .OR. bf .LT. bi .OR. mf .LT. mi .OR. nf .LT. ni .OR. kf .LT. ki) THEN
-            IF (dbg) WRITE (*, *) "Empty"
-            RETURN
-         ENDIF
-      ENDIF
+      d2=d+1
 
-      IF (af-ai+1 <= dbcsr_cfg%multrec_limit .AND. bf-bi+1 <= dbcsr_cfg%multrec_limit) THEN
-         IF (af-ai+1 .GT. 0 .AND. bf-bi+1 .GT. 0) &
-            CALL dbcsr_mm_csr_multiply(this%csr, left, right, &
-                                       mi=mi, mf=mf, ni=ni, nf=nf, ki=ki, kf=kf, &
-                                       ai=ai, af=af, &
-                                       bi=bi, bf=bf, &
-                                       m_sizes=this%m_sizes, n_sizes=this%n_sizes, k_sizes=this%k_sizes, &
-                                       c_local_rows=this%c_local_rows, c_local_cols=this%c_local_cols, &
-                                       c_has_symmetry=this%c_has_symmetry, keep_sparsity=this%keep_sparsity, &
-                                       use_eps=this%use_eps, row_max_epss=this%row_max_epss, &
-                                       flop=this%flop, &
-                                       a_index=a_index, b_index=b_index, &
-                                       a_norms=this%a_norms, b_norms=this%b_norms)
-         RETURN
-      ENDIF
+      condition = (ithread .eq. 0 ) .and. (d .eq. 3)
+      !condition = .False.
 
-      M = mf-mi+1
-      N = nf-ni+1
-      K = kf-ki+1
-      IF (dbg) THEN
-         WRITE (*, *) 'm,k,n', M, K, N
-      ENDIF
-      IF (M >= MAX(N, K)) cut = 1
-      IF (K >= MAX(N, M)) cut = 2
-      IF (N >= MAX(M, K)) cut = 3
-      SELECT CASE (cut)
-      CASE (1)
-         s1 = M/2
-         acut = find_cut_row(ai, af, a_index, mi+s1-1)
-         CALL sparse_multrec(this, left, right, mi, mi+s1-1, ni, nf, ki, kf, &
-                             ai, acut-1, a_index, bi, bf, b_index, d+1)
-         CALL sparse_multrec(this, left, right, mi+s1, mf, ni, nf, ki, kf, &
-                             acut, af, a_index, bi, bf, b_index, d+1)
-      CASE (2)
-         s1 = K/2
-         acut = find_cut_col(ai, af, a_index, ki+s1-1)
-         IF (dbg) THEN
-            WRITE (*, *) N, s1, ni+s1-1, "/", ai, af, acut
-            WRITE (*, '(3(I7))') a_index
-         ENDIF
-         bcut = find_cut_row(bi, bf, b_index, ki+s1-1)
-         IF (dbg) THEN
-            WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
-            WRITE (*, '(3(I7))') b_index
-         ENDIF
-         CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
-                             ai, acut-1, a_index, bi, bcut-1, b_index, d+1)
-         CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
-                             acut, af, a_index, bcut, bf, b_index, d+1)
-      CASE (3)
-         s1 = N/2
-         bcut = find_cut_col(bi, bf, b_index, ni+s1-1)
-         IF (dbg) THEN
-            WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
-            WRITE (*, '(3(I7))') b_index
-         ENDIF
-         CALL sparse_multrec(this, left, right, mi, mf, ni, ni+s1-1, ki, kf, &
-                             ai, af, a_index, bi, bcut-1, b_index, d+1)
-         CALL sparse_multrec(this, left, right, mi, mf, ni+s1, nf, ki, kf, &
-                             ai, af, a_index, bcut, bf, b_index, d+1)
-      END SELECT
-   END SUBROUTINE sparse_multrec
+      !print *, "DEPTH=", d, " ithread=", ithread, "nthreads=",nthreads, "condition=", condition
+      !if (d .eq. 0 .and. ithread .eq. 0) print *, "aindex=",af,a_index(1,:)
+
+
+
+      !if (d .eq. 0) print *, "bindex=",bf,b_index(1,:)
+
+            IF (dbg) THEN
+               WRITE (*, '(I7,1X,5(A,2(1X,I7)))') d, " rm", mi, mf, ",", ni, nf, ",", ki, kf, "/", ai, af, ",", bi, bf
+            ENDIF
+            IF (.TRUE.) THEN
+               IF (af .LT. ai .OR. bf .LT. bi .OR. mf .LT. mi .OR. nf .LT. ni .OR. kf .LT. ki) THEN
+                  IF (dbg) WRITE (*, *) "Empty"
+                  RETURN
+               ENDIF
+            ENDIF
+
+
+            !IF (af-ai+1 <= dbcsr_cfg%multrec_limit .AND. bf-bi+1 <= dbcsr_cfg%multrec_limit) THEN
+            !print *, d, af, ai, bf, bi, af-ai+1, bf-bi+1
+            IF (af-ai+1 <= 16 .AND. bf-bi+1 <= 16) THEN
+               IF (af-ai+1 .GT. 0 .AND. bf-bi+1 .GT. 0) THEN
+                  !print*, "max chunk size is", dbcsr_cfg%multrec_limit
+                  write(30,*) ithread,af-ai+1,bf-bi+1,mi,mf,ni,nf,ki,kf,ai,af,bi,bf
+                  !print *, "chunk is small enough", mi,mf,ni,nf,ki,kf
+                              CALL dbcsr_mm_csr_multiply(this%csr(ithread), left, right, &
+                                             mi=mi, mf=mf, ni=ni, nf=nf, ki=ki, kf=kf, &
+                                             ai=ai, af=af, &
+                                             bi=bi, bf=bf, &
+                                             m_sizes=this%m_sizes, n_sizes=this%n_sizes, k_sizes=this%k_sizes, &
+                                             c_local_rows=this%c_local_rows, c_local_cols=this%c_local_cols, &
+                                             c_has_symmetry=this%c_has_symmetry, keep_sparsity=this%keep_sparsity, &
+                                             use_eps=this%use_eps, row_max_epss=this%row_max_epss, &
+                                             flop=this%flop, &
+                                             a_index=a_index, b_index=b_index, &
+                                             a_norms=this%a_norms, b_norms=this%b_norms)
+                  !print *, "chunk multiplied. DEPTH=",d
+               endif
+               RETURN
+            ENDIF
+
+            if (d .gt. 20) STOP "Depth too large"
+
+            M = mf-mi+1
+            N = nf-ni+1
+            K = kf-ki+1
+            ! print*, "have to cut", M,N,K
+            IF (dbg) THEN
+            !   WRITE (*, *) 'm,k,n', M, K, N
+            ENDIF
+            if (d>=0) then
+              IF (M >= MAX(N, K)) cut = 1
+              IF (K >= MAX(N, M)) cut = 2
+              IF (N >= MAX(M, K)) cut = 3
+            else
+              if (M>=N) cut=1
+              IF (N>M) cut=3
+            endif
+            SELECT CASE (cut)
+            CASE (1)
+               s1 = M/2
+               acut = find_cut_row(ai, af, a_index, mi+s1-1)
+              ! print *, "cut M",acut
+               mf1=mi+s1-1
+               acut1=acut-1
+              !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf1,ni,nf,ki,kf,ai,acut1,bi,bf,d2)
+              if (condition) write(20,*) "m",omp_get_thread_num(),mi,mf1,ni,nf,ki,kf
+               CALL sparse_multrec(this, left, right, mi, mf1, ni, nf, ki, kf, &
+                                   ai, acut1, a_index, bi, bf, b_index, d2)
+              !$OMP END TASK
+              mi2=mi+s1
+              !$OMP TASK if(condition) FIRSTPRIVATE(mi2,mf,ni,nf,ki,kf,acut,af,bi,bf,d2)
+              if (condition) write(20,*) "m",omp_get_thread_num(),mi2,mf,ni,nf,ki,kf
+               CALL sparse_multrec(this, left, right, mi2, mf, ni, nf, ki, kf, &
+                                   acut, af, a_index, bi, bf, b_index, d2)
+              !$OMP END TASK
+      !        /*!$OMP TASK if (condition)
+      !        print *, "I AM A TASK I AM ON THREAD", omp_get_thread_num()!
+      !        !$OMP END TASK*/
+            CASE (2)
+
+               s1 = K/2
+               acut = find_cut_col(ai, af, a_index, ki+s1-1)
+               IF (dbg) THEN
+                  WRITE (*, *) N, s1, ni+s1-1, "/", ai, af, acut
+                  WRITE (*, '(3(I7))') a_index
+               ENDIF
+               bcut = find_cut_row(bi, bf, b_index, ki+s1-1)
+               IF (dbg) THEN
+                  WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
+                  WRITE (*, '(3(I7))') b_index
+               ENDIF
+               !print *, "cut K", acut,bcut
+               if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki,ki+s1-1
+               CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
+                                   ai, acut-1, a_index, bi, bcut-1, b_index, d2)
+               if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki+s1,kf
+               CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
+                                   acut, af, a_index, bcut, bf, b_index, d2)
+            CASE (3)
+
+               s1 = N/2
+               bcut = find_cut_col(bi, bf, b_index, ni+s1-1)
+               IF (dbg) THEN
+                  WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
+                  WRITE (*, '(3(I7))') b_index
+               ENDIF
+              !print *, "cut N", bcut
+              nf1=ni+s1-1
+              bcut1=bcut-1
+              !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf,ni,nf1,ki,kf,ai,af,bi,bcut1,d2)
+              if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni,nf1,ki,kf
+               CALL sparse_multrec(this, left, right, mi, mf, ni, nf1, ki, kf, &
+                                   ai, af, a_index, bi, bcut1, b_index, d2)
+              !$OMP END TASK
+              ni2=ni+s1
+              !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf,ni2,nf,ki,kf,ai,af,bcut,bf,d2)
+              if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni2,nf,ki,kf
+               CALL sparse_multrec(this, left, right, mi, mf, ni2, nf, ki, kf, &
+                                   ai, af, a_index, bcut, bf, b_index, d2)
+              !$OMP END TASK
+      !        !$OMP TASK if(condition)
+      !        print *, "I AM A TASK I AM ON THREAD", omp_get_thread_num()
+      !        !$OMP END TASK
+            END SELECT
+         END SUBROUTINE sparse_multrec
 
 ! ***************************************************************************************************
 ! **************************************************************************************************
@@ -851,4 +1025,3 @@ CONTAINS
 #:include "dbcsr_mm_multrec.f90"
 
 END MODULE dbcsr_mm_multrec
-

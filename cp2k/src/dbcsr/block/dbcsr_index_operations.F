@@ -1297,7 +1297,7 @@ CONTAINS
 !$    nthreads = OMP_GET_MAX_THREADS()
       !
       ! Reshuffle according to threads
-      IF (nthreads .GT. 0 .AND. thread_redist) THEN
+      IF (nthreads .GT. 0 .AND. thread_redist .and. .FALSE.) THEN
          td => array_data(dbcsr_distribution_thread_dist(dbcsr_distribution(matrix)))
          IF (matrix%local_indexing) THEN
             local_rows => array_data(matrix%local_rows)

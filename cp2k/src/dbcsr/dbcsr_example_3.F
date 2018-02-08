@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !   CP2K: A general program to perform molecular dynamics simulations                              !
-!   Copyright (C) 2000 - 2018  CP2K developers group                                               !
+!   Copyright (C) 2000 - 2017  CP2K developers group                                               !
 !--------------------------------------------------------------------------------------------------!
 
 ! **************************************************************************************************
@@ -43,6 +43,11 @@ PROGRAM dbcsr_example_3
    TYPE(dbcsr_distribution_type)             :: dist
    REAL(real_8), DIMENSION(:), ALLOCATABLE  :: values
    LOGICAL                                  :: tr
+   
+   !set up random seed so all runs will be the same
+   INTEGER :: SEED(33)
+   SEED=314159
+   CALL RANDOM_SEED(PUT=SEED)
 
    !***************************************************************************************
 
@@ -69,8 +74,8 @@ PROGRAM dbcsr_example_3
 
    !
    ! the matrix will contain nblkrows_total row blocks and nblkcols_total column blocks
-   nblkrows_total = 4
-   nblkcols_total = 4
+   nblkrows_total = 16
+   nblkcols_total = 16
 
    !
    ! set the block size for each row and column
@@ -169,9 +174,13 @@ PROGRAM dbcsr_example_3
 
    !
    ! print the matrices
-   CALL dbcsr_print(matrix_a)
-   CALL dbcsr_print(matrix_b)
-   CALL dbcsr_print(matrix_c)
+   !CALL dbcsr_print(matrix_a)
+   !CALL dbcsr_print(matrix_b)
+   !CALL dbcsr_print(matrix_c)
+   
+   open (unit=10,file="c.txt")
+   CALL dbcsr_print(matrix_c,matlab_format=.true.,unit_nr=10)
+   close(10)
 
    !
    ! release the matrices
