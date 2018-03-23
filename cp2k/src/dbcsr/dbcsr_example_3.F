@@ -43,7 +43,7 @@ PROGRAM dbcsr_example_3
    TYPE(dbcsr_distribution_type)             :: dist
    REAL(real_8), DIMENSION(:), ALLOCATABLE  :: values
    LOGICAL                                  :: tr
-   
+
    !set up random seed so all runs will be the same
    INTEGER :: SEED(33)
    SEED=314159
@@ -131,7 +131,8 @@ PROGRAM dbcsr_example_3
    CALL dbcsr_distribution_get(dist, mynode=mynode)
    ALLOCATE (values(max_nze))
    DO row = 1, dbcsr_nblkrows_total(matrix_a)
-      DO col = MAX(row-1, 1), MIN(row+1, dbcsr_nblkcols_total(matrix_a))
+      !DO col = MAX(row-1, 1), MIN(row+1, dbcsr_nblkcols_total(matrix_a))
+      DO col =1,  dbcsr_nblkrows_total(matrix_a)
          tr = .FALSE.
          row_s = row; col_s = col
          CALL dbcsr_get_stored_coordinates(matrix_a, row_s, col_s, node_holds_blk)
@@ -177,7 +178,7 @@ PROGRAM dbcsr_example_3
    !CALL dbcsr_print(matrix_a)
    !CALL dbcsr_print(matrix_b)
    !CALL dbcsr_print(matrix_c)
-   
+
    open (unit=10,file="c.txt")
    CALL dbcsr_print(matrix_c,matlab_format=.true.,unit_nr=10)
    close(10)

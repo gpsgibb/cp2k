@@ -1464,7 +1464,8 @@ CONTAINS
                               sort_data)
       TYPE(dbcsr_type), INTENT(INOUT)                    :: matrix
       INTEGER, DIMENSION(*), INTENT(IN)                  :: old_row_p, old_col_i, old_blk_p
-      LOGICAL, INTENT(IN)                                :: sort_data
+      !LOGICAL, INTENT(IN)                                :: sort_data
+      LOGICAL                              :: sort_data
 
       CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_merge_all', &
          routineP = moduleN//':'//routineN
@@ -1475,7 +1476,7 @@ CONTAINS
                                                             which_wm, wm_datasize
       INTEGER, ALLOCATABLE, DIMENSION(:), SAVE           :: all_data_offsets, all_data_sizes, &
                                                             new_blk_p_sorted, new_blk_sizes, &
-                                                            new_row_p
+                                                            new_row_p, duplicates
       INTEGER, ALLOCATABLE, DIMENSION(:), SAVE, TARGET   :: blk_d, new_blk_p, new_col_i
       INTEGER, DIMENSION(:), POINTER                     :: my_row_p
       INTEGER, DIMENSION(:), POINTER, SAVE               :: cbs, rbs
@@ -1486,6 +1487,8 @@ CONTAINS
       TYPE(i_array_p), DIMENSION(:), POINTER, SAVE       :: all_blk_p, all_col_i, all_row_p
 
 !   ---------------------------------------------------------------------------
+
+      !sort_data= .true.
 
       CALL timeset(routineN, handle)
       !> \par Outline
@@ -1499,6 +1502,9 @@ CONTAINS
 
       IF (dbg) WRITE (*, *) routineN//" starting, sort?", sort_data
 !$OMP     BARRIER
+
+print *, "am I parallel?", OMP_GET_NUM_THREADS()
+!stop
       nrows = matrix%nblkrows_total
       nwms = SIZE(matrix%wms)
 !$    IF (nwms /= OMP_GET_NUM_THREADS()) &
@@ -1562,9 +1568,12 @@ CONTAINS
 !$OMP     BARRIER
       !
 !$OMP     MASTER
+      print *, "new_nblks", new_nblks
+      print *, "new_nze", new_nze
       ALLOCATE (new_row_p(nrows+1))
       ALLOCATE (new_col_i(new_nblks))
       ALLOCATE (new_blk_p(new_nblks))
+      allocate(duplicates(new_nblks))
       IF (sort_data) THEN
          ALLOCATE (blk_d(new_nblks))
       ELSE
@@ -1632,7 +1641,12 @@ CONTAINS
                        blk_d, &
                        old_row_p, old_col_i, old_blk_p, &
                        all_row_p, all_col_i, all_blk_p, &
-                       all_data_offsets, nwms, nrows, max_row_count, sort_data)
+                       all_data_offsets, nwms, nrows, max_row_count, sort_data, &
+                       duplicates)
+
+      CALL remove_duplicates(row_p=new_row_p, blk_p=new_blk_p, &
+                             col_i=new_col_i, nblocks = new_nblks, &
+                             duplicates = duplicates, nrows = nrows)
       !
       ! The data is then merged in one of two ways.
       !
@@ -1726,6 +1740,7 @@ CONTAINS
       DEALLOCATE (new_blk_p)
       DEALLOCATE (all_data_sizes)
       DEALLOCATE (all_data_offsets)
+      deallocate(duplicates)
       IF (sort_data) THEN
          DEALLOCATE (all_data_areas)
          DEALLOCATE (new_blk_sizes)
@@ -1850,11 +1865,13 @@ CONTAINS
    SUBROUTINE merge_index(new_row_p, new_col_i, new_blk_p, &
                           blk_d, old_row_p, old_col_i, old_blk_p, &
                           all_row_p, all_col_i, all_blk_p, &
-                          all_data_offsets, nwms, nrows, max_row_count, sort_data)
+                          all_data_offsets, nwms, nrows, max_row_count, sort_data, &
+                          duplicates)
       INTEGER, DIMENSION(*), INTENT(IN)                  :: new_row_p
       INTEGER, DIMENSION(*), INTENT(OUT), TARGET         :: new_col_i, new_blk_p
       INTEGER, DIMENSION(*), INTENT(IN), TARGET          :: blk_d
       INTEGER, DIMENSION(*), INTENT(IN)                  :: old_row_p, old_col_i, old_blk_p
+      integer, dimension(*), intent(inout)               :: duplicates
       TYPE(i_array_p), DIMENSION(*), INTENT(IN)          :: all_row_p, all_col_i, all_blk_p
       INTEGER, DIMENSION(*), INTENT(IN)                  :: all_data_offsets
       INTEGER, INTENT(IN)                                :: nwms, nrows, max_row_count
@@ -1867,6 +1884,8 @@ CONTAINS
                                                             src_blk_2, t
       INTEGER, ALLOCATABLE, DIMENSION(:)                 :: blk_p_buff, tmp_arr
       INTEGER, DIMENSION(:), POINTER                     :: blk_span, col_span, d_span
+      !integer, allocatable, dimension(:,:)               :: duplicates
+
 
 !   ---------------------------------------------------------------------------
 
@@ -1874,16 +1893,22 @@ CONTAINS
       !
       ALLOCATE (tmp_arr(max_row_count))
       ALLOCATE (blk_p_buff(max_row_count))
+      !allocate(duplicates(max_row_count,nrows))
+      !duplicates=0
+
+
       !
 !$OMP     DO
       DO row = 1, nrows
-         first_row_blk = new_row_p(row)+1
-         last_row_blk = new_row_p(row+1)
-         col_span => new_col_i(first_row_blk:last_row_blk)
-         blk_span => new_blk_p(first_row_blk:last_row_blk)
+         first_row_blk = new_row_p(row)+1 !get block number for first member in row
+         last_row_blk = new_row_p(row+1) !get block number for last member in row
+         col_span => new_col_i(first_row_blk:last_row_blk) !columns in this row
+         blk_span => new_blk_p(first_row_blk:last_row_blk) !blocks in this row
          IF (sort_data) d_span => blk_d(first_row_blk:last_row_blk)
          src_blk_1 = old_row_p(row)+1
          src_blk_2 = old_row_p(row+1)
+        ! print* , row,OMP_GET_THREAD_NUM(),src_blk_1,src_blk_2
+         !fill in existing blocks in matrix (shouldn't be any)
          blk1 = 1
          blk2 = blk1+(src_blk_2-src_blk_1+1)-1
          col_span(blk1:blk2) = old_col_i(src_blk_1:src_blk_2)
@@ -1901,26 +1926,217 @@ CONTAINS
             ENDDO
          ELSE
             DO t = 1, nwms
-               src_blk_1 = all_row_p(t)%p(row)+1
-               src_blk_2 = all_row_p(t)%p(row+1)
-               blk1 = blk2+1
+               src_blk_1 = all_row_p(t)%p(row)+1 !first block in wm row
+               src_blk_2 = all_row_p(t)%p(row+1) !last block in wm row
+               blk1 = blk2+1 !bock numbering for global row
                blk2 = blk1+(src_blk_2-src_blk_1+1)-1
                col_span(blk1:blk2) = all_col_i(t)%p(src_blk_1:src_blk_2)
                blk_span(blk1:blk2) = all_blk_p(t)%p(src_blk_1:src_blk_2) &
                     &              +all_data_offsets(t)
             ENDDO
          ENDIF
-         CALL sort(col_span, SIZE(col_span), tmp_arr)
+         !if (row .eq. 5) print *, row,"pre-sort col_span", col_span
+         CALL sort(col_span, SIZE(col_span), tmp_arr) !sort columns?
+         !if (row .eq. 5) print *, row,"col_span", col_span
+         !print *, row,"tmp_arr", tmp_arr
          blk_p_buff(1:SIZE(blk_span)) = blk_span(:)
-         blk_span(1:SIZE(blk_span)) = blk_p_buff(tmp_arr(1:SIZE(blk_span)))
+         blk_span(1:SIZE(blk_span)) = blk_p_buff(tmp_arr(1:SIZE(blk_span))) !sort columns in row
+         !if (row .eq. 5) print*,row,"blk_span", blk_span(1:SIZE(blk_span))
+        !check for duplicates
+
+        duplicates(first_row_blk) = 0
+         do t=2,size(col_span)
+           if (col_span(t-1) .eq. col_span(t)) THEN
+             print *, "duplicate: row,col=", row,col_span(t)
+             !blk_span(t) = blk_span(t-1)
+             duplicates(first_row_blk+t-1) = 1
+           ELSE
+             duplicates(first_row_blk+t-1) = 0
+           endif
+        enddo
       ENDDO
 !$OMP     END DO
+
+!$OMP BARRIER
+
+!$OMP MASTER
+      do t=1,nwms
+        print *, "wm,data_offset", t, all_data_offsets(t)
+      enddo
+
+      print*, "number of duplicates=", sum(duplicates(1:new_row_p(nrows+1)))
+!$OMP END MASTER
       !
       DEALLOCATE (tmp_arr)
       DEALLOCATE (blk_p_buff)
-      !
+
+    !  !$OMP Master
+
+    !  print,* "DUPLICATES:"
+    !  do row=1,nrows
+    !    do t=1,max_row_count
+    !      if (duplicates(t,row) .ne. 0) THEN
+    !        print *, "row, col =",row,t
+    !      endif
+    !    ENDDO
+    !  enddo
+    !  !$OMP END MASTER
+
+
       CALL timestop(error_handle)
+      !stop
    END SUBROUTINE merge_index
+
+   !this finds duplicate blocks and removes them from the indexes.
+   !the eventual aim is for this to do three things:
+   ! 1) create new indexes without duplicate blocks
+   ! 2) merge duplicates into one block in one work matrix
+   ! 3) remove duplicate blocks from matrix data area
+   subroutine remove_duplicates(row_p, blk_p, col_i, nblocks, duplicates, nrows)
+     integer, dimension(:), intent(inout) :: row_p
+     integer, allocatable, dimension(:), intent(inout), target :: blk_p
+     integer, allocatable, dimension(:), intent(inout), target :: col_i
+     integer, intent(inout) :: nblocks
+     integer, dimension(:), intent(in) :: duplicates
+     integer, intent(in)     :: nrows
+
+     integer, allocatable, dimension(:), target, save :: new_blk_p
+     integer, allocatable, dimension(:), target, save :: new_col_i
+     integer, allocatable, dimension(:), save :: tmp_row_p
+
+     integer :: row
+     integer :: old_blk_i, old_blk_f, old_blk
+     integer :: new_blk_i, new_blk_f, new_blk
+     integer :: n
+     integer, save :: new_nblocks
+
+
+     !$OMP Master
+     print*, ""
+     print*, "-----------------------------------------"
+     print*, "- Entering subroutine remove duplicates -"
+     print*, "-----------------------------------------"
+
+     allocate(tmp_row_p(nrows+1))
+
+
+     new_nblocks=nblocks-sum(duplicates(1:nblocks))
+     allocate(new_blk_p(new_nblocks))
+     allocate(new_col_i(new_nblocks))
+
+     print *, "old,new nblocks=", nblocks, new_nblocks
+     print *, ""
+
+
+     !$OMP END MASTER
+     !$OMP BARRIER
+
+     !if we have duplicates then do this else don't bothere cos there are none to remove
+     if (new_nblocks .ne. nblocks) then
+
+        !count number of blocks in each row in new index
+
+        !$OMP DO
+        do row=1,nrows
+              old_blk_i = row_p(row)+1
+              old_blk_f = row_p(row+1)
+              n=0
+
+              do old_blk=old_blk_i,old_blk_f
+                if (duplicates(old_blk) .eq. 0) then
+                  n=n+1
+                endif
+              enddo
+              print *, "row", row," has", n, " new elements"
+
+              tmp_row_p(row) = n
+         enddo
+         !$OMP END DO
+
+         !$OMP BARRIER
+
+         ! rebuild temporary(new) row_p index
+         !$OMP MASTER
+         CALL dbcsr_build_row_index(tmp_row_p, nrows)
+         print *, "tmp_row_p = ..."
+         do row=1,nrows+1
+           print *, row, tmp_row_p(row)
+         enddo
+         !$OMP END MASTER
+
+         !$OMP BARRIER
+
+         !construct new indexes for rows and blocks
+
+         !$OMP DO
+         do row=1,nrows
+           old_blk_i = row_p(row)+1
+           old_blk_f = row_p(row+1)
+
+           new_blk_i = tmp_row_p(row)+1
+           new_blk_f = tmp_row_p(row+1)
+
+           new_blk= new_blk_i
+           !loop over old blocks, check for duplicate. If not, add into new block
+           do old_blk=old_blk_i,old_blk_f
+             if (duplicates(old_blk) .eq. 0) THEN
+               new_blk_p(new_blk) = blk_p(old_blk)
+               new_col_i(new_blk) = col_i(old_blk)
+               new_blk=new_blk+1
+             endif
+           enddo
+           if (new_blk -1 .ne. new_blk_f) print *, "Whoops!", row, new_blk_f, new_blk
+         enddo
+         !$OMP END DO
+
+
+        !$OMP BARRIER
+
+
+        !now replace col_i and blk_p with new_col_i and new_blk_p. Also copy in tmp_row_p
+        !$OMP Master
+
+        print *, "Replacing old indices with new ones..."
+
+        row_p(1:nrows+1) = tmp_row_p(1:nrows+1)
+        nblocks=new_nblocks
+
+        deallocate(blk_p)
+        deallocate(col_i)
+
+        allocate(blk_p(nblocks))
+        allocate(col_i(nblocks))
+
+        !$OMP END MASTER
+
+        !$OMP BARRIER
+
+        !$OMP DO
+        do new_blk = 1,nblocks
+           blk_p(new_blk) = new_blk_p(new_blk)
+           col_i(new_blk) = new_col_i(new_blk)
+        ENDDO
+        !$OMP END DO
+
+        !$OMP BARRIER
+
+    endif
+
+      !$OMP MASTER
+      deallocate(new_blk_p)
+      deallocate(new_col_i)
+      deallocate(tmp_row_p)
+
+      print *, "Done!"
+
+      print*, "-----------------------------------------"
+      print*, "- exiting subroutine remove duplicates  -"
+      print*, "-----------------------------------------"
+      print*, ""
+      !$OMP END MASTER
+      !$OMP BARRIER
+      !stop
+   end subroutine
 
 #:include "dbcsr_work_operations.f90"
 

@@ -147,6 +147,13 @@ CONTAINS
       row_blk_offset => array_data(matrix%row_blk_offset)
       col_blk_offset => array_data(matrix%col_blk_offset)
 
+      print *, "row_blk_size", row_blk_size
+      print *, "col_blk_size", col_blk_size
+      print *, "row_blk_offset", row_blk_offset
+      print*, "col_blk_offset", col_blk_offset
+      print *, "matrix%nblkrows_total", matrix%nblkrows_total
+      print *, "matrix%nblkcols_total", matrix%nblkcols_total
+
       IF (matrix%nblks .GT. 0) THEN
          IF (matrix%list_indexing) THEN
             IF (SIZE(matrix%coo_l) .NE. 3*matrix%nblks) &
@@ -164,6 +171,7 @@ CONTAINS
             ebr = matrix%nblkrows_total
             sblk = 1
          ENDIF
+         ! loop over block rows
          DO ibr = 1, ebr
             IF (matrix%list_indexing) THEN
                fblk = 1
@@ -174,6 +182,8 @@ CONTAINS
                lblk = matrix%row_p(br+1)
                m = row_blk_size(br)
             ENDIF
+            print*, "row:",ibr,"First, last=", fblk, lblk
+            !loop over blocks in that row
             DO blk = fblk, lblk, sblk
                IF (matrix%list_indexing) THEN
                   br = matrix%coo_l(blk)
@@ -189,8 +199,9 @@ CONTAINS
                   ablk_p = matrix%blk_p(blk)
                ENDIF
                n = col_blk_size(bc)
-               mn = m*n
+               mn = m*n !size of block in m (row) and n (col)
                blk_p = ABS(ablk_p)
+               print*,"block:", blk, ":", blk_p, blk_p+mn-1, br, bc
                tr = ablk_p .LT. 0
                block_exists: IF (blk_p .NE. 0) THEN
                   IF (mn .GT. 0) THEN

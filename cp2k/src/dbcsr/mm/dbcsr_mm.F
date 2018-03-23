@@ -966,7 +966,7 @@ CONTAINS
       IF (INT(matrix_c%nblks, KIND=int_8) > &
           INT(SIZE(array_data(matrix_c%row_blk_size)), KIND=int_8)* &
           INT(SIZE(array_data(matrix_c%col_blk_size)), KIND=int_8)) &
-         CPABORT("Bug: Matrix contains too many blocks")
+         !CPABORT("Bug: Matrix contains too many blocks")
       output_unit = default_output_unit
       num_multiplications = num_multiplications+1
       CALL timestop(handle)
