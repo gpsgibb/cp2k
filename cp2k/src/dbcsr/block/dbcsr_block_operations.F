@@ -690,7 +690,7 @@ CONTAINS
 
 !   ---------------------------------------------------------------------------
 
-print *, "dbcsr_copy_aa"
+!print *, "dbcsr_copy_aa"
 
       IF (debug_mod) THEN
          IF (.NOT. ASSOCIATED(dst%d) .OR. .NOT. ASSOCIATED(src%d)) &
@@ -875,7 +875,7 @@ print *, "dbcsr_copy_aa"
       INTEGER, DIMENSION(2)                              :: dst_ub, src_ub
 
 !   ---------------------------------------------------------------------------
-print *, "dbcsr_copy_aa2"
+!print *, "dbcsr_copy_aa2"
       CALL timeset(routineN, handle)
       !
       src_dt = dbcsr_data_get_type(src)

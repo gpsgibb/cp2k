@@ -1488,7 +1488,7 @@ CONTAINS
 
 !   ---------------------------------------------------------------------------
 
-      !sort_data= .true.
+      sort_data= .true.
 
       CALL timeset(routineN, handle)
       !> \par Outline
@@ -1648,7 +1648,9 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       CALL remove_duplicates(row_p=new_row_p, blk_p=new_blk_p, &
                              col_i=new_col_i, nblocks = new_nblks, &
                              duplicates = duplicates, nrows = nrows, &
-                             sort_data=sort_data, blk_d=blk_d)
+                             sort_data=sort_data, blk_d=blk_d, &
+                             data_areas=all_data_areas, &
+                             n_elements=new_nze)
       !
       ! The data is then merged in one of two ways.
       !
@@ -2000,7 +2002,8 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
    ! 1) create new indexes without duplicate blocks
    ! 2) merge duplicates into one block in one work matrix
    ! 3) remove duplicate blocks from matrix data area
-   subroutine remove_duplicates(row_p, blk_p, col_i, nblocks, duplicates, nrows, sort_data, blk_d)
+   subroutine remove_duplicates(row_p, blk_p, col_i, nblocks, duplicates, nrows,&
+                                sort_data, blk_d, data_areas, n_elements)
      integer, dimension(:), intent(inout) :: row_p
      integer, allocatable, dimension(:), intent(inout), target :: blk_p
      integer, allocatable, dimension(:), intent(inout), target :: col_i
@@ -2009,6 +2012,9 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
      integer, intent(in)     :: nrows
      logical, intent(in)     :: sort_data
      integer, allocatable, dimension(:), intent(inout) :: blk_d
+     TYPE(dbcsr_data_obj), DIMENSION(:), &
+        intent(in)                                            :: data_areas
+     integer, intent(inout)  :: n_elements
 
      integer, allocatable, dimension(:), target, save :: new_blk_p
      integer, allocatable, dimension(:), target, save :: new_col_i
@@ -2021,12 +2027,17 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
      integer :: n
      integer, save :: new_nblocks
 
+     integer :: local_elements !number of elements processed by the thread
+
 
      !$OMP Master
      print*, ""
      print*, "-----------------------------------------"
      print*, "- Entering subroutine remove duplicates -"
+     print *, "N_elements=",n_elements
      print*, "-----------------------------------------"
+
+     if (.not. sort_data) error stop "you must set sort_data=.true. for now"
 
      allocate(tmp_row_p(nrows+1))
 
@@ -2040,8 +2051,13 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
      print *, "old,new nblocks=", nblocks, new_nblocks
      print *, ""
 
+     !n_elements=0
+
 
      !$OMP END MASTER
+
+     local_elements=0
+
      !$OMP BARRIER
 
      !if we have duplicates then do this else don't bothere cos there are none to remove
@@ -2097,6 +2113,18 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
                new_col_i(new_blk) = col_i(old_blk)
                if (sort_data) new_blk_d(new_blk) = blk_d(old_blk)
                new_blk=new_blk+1
+
+
+             else
+               !we need to merge blocks
+               print *, "moving data from", blk_d(old_blk), "->",  new_blk_d(new_blk-1)
+               call merge_blocks(dst_area=data_areas(new_blk_d(new_blk-1)),&
+                                 dst_blk=new_blk_p(new_blk-1), &
+                                 src_area=data_areas(blk_d(old_blk)),&
+                                 src_blk=blk_p(old_blk), &
+                                 size=4)
+               !! NEED TO CHANGE THIS TO REFLECT BLOCK SIZE
+               local_elements=local_elements-4
              endif
            enddo
            if (new_blk -1 .ne. new_blk_f) print *, "Whoops!", row, new_blk_f, new_blk
@@ -2104,11 +2132,15 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
          !$OMP END DO
 
 
+
+
         !$OMP BARRIER
 
 
         !now replace col_i and blk_p with new_col_i and new_blk_p. Also copy in tmp_row_p
         !$OMP Master
+
+      !  if (nblocks .gt. 1) error stop "should be the final matrix"
 
         print *, "Replacing old indices with new ones..."
 
@@ -2138,6 +2170,10 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
         ENDDO
         !$OMP END DO
 
+        !$OMP ATOMIC
+         n_elements = n_elements + local_elements
+        !$OMP END ATOMIC
+
         !$OMP BARRIER
 
     endif
@@ -2152,12 +2188,34 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 
       print*, "-----------------------------------------"
       print*, "- exiting subroutine remove duplicates  -"
+      print*, "N_elements=",n_elements
       print*, "-----------------------------------------"
       print*, ""
       !$OMP END MASTER
       !$OMP BARRIER
       !stop
    end subroutine
+
+
+! merges two blocks (b1 and b2) together (e.g. b1 = b1+b2)
+   subroutine merge_blocks(dst_area,dst_blk,src_area,src_blk,size)
+      TYPE(dbcsr_data_obj), intent(in) :: dst_area, src_area
+      integer, intent(in) :: src_blk, dst_blk,size
+
+      integer :: ld,ud, ls, us
+
+      ld=dst_blk
+      ud=dst_blk+size-1
+
+      ls=src_blk
+      us=src_blk+size-1
+
+    !  print *, ld, ud, ls,us
+
+      dst_area%d%r_dp(ld:ud) = dst_area%d%r_dp(ld:ud) + src_area%d%r_dp(ls:us)
+
+    end subroutine
+
 
 #:include "dbcsr_work_operations.f90"
 
