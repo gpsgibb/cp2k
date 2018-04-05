@@ -1644,9 +1644,11 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
                        all_data_offsets, nwms, nrows, max_row_count, sort_data, &
                        duplicates)
 
+
       CALL remove_duplicates(row_p=new_row_p, blk_p=new_blk_p, &
                              col_i=new_col_i, nblocks = new_nblks, &
-                             duplicates = duplicates, nrows = nrows)
+                             duplicates = duplicates, nrows = nrows, &
+                             sort_data=sort_data, blk_d=blk_d)
       !
       ! The data is then merged in one of two ways.
       !
@@ -1941,6 +1943,12 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
          !print *, row,"tmp_arr", tmp_arr
          blk_p_buff(1:SIZE(blk_span)) = blk_span(:)
          blk_span(1:SIZE(blk_span)) = blk_p_buff(tmp_arr(1:SIZE(blk_span))) !sort columns in row
+
+         !if we  want sort_data then we also need to sort d_span so that the blocks point to the correct work matrix.
+         if (sort_data) then
+             blk_p_buff(1:size(blk_span)) = d_span(:)
+             d_span(1:size(blk_span)) = blk_p_buff(tmp_arr(1:SIZE(blk_span)))
+         endif
          !if (row .eq. 5) print*,row,"blk_span", blk_span(1:SIZE(blk_span))
         !check for duplicates
 
@@ -1992,17 +2000,20 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
    ! 1) create new indexes without duplicate blocks
    ! 2) merge duplicates into one block in one work matrix
    ! 3) remove duplicate blocks from matrix data area
-   subroutine remove_duplicates(row_p, blk_p, col_i, nblocks, duplicates, nrows)
+   subroutine remove_duplicates(row_p, blk_p, col_i, nblocks, duplicates, nrows, sort_data, blk_d)
      integer, dimension(:), intent(inout) :: row_p
      integer, allocatable, dimension(:), intent(inout), target :: blk_p
      integer, allocatable, dimension(:), intent(inout), target :: col_i
      integer, intent(inout) :: nblocks
      integer, dimension(:), intent(in) :: duplicates
      integer, intent(in)     :: nrows
+     logical, intent(in)     :: sort_data
+     integer, allocatable, dimension(:), intent(inout) :: blk_d
 
      integer, allocatable, dimension(:), target, save :: new_blk_p
      integer, allocatable, dimension(:), target, save :: new_col_i
      integer, allocatable, dimension(:), save :: tmp_row_p
+     integer, allocatable, dimension(:), save :: new_blk_d
 
      integer :: row
      integer :: old_blk_i, old_blk_f, old_blk
@@ -2023,6 +2034,8 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
      new_nblocks=nblocks-sum(duplicates(1:nblocks))
      allocate(new_blk_p(new_nblocks))
      allocate(new_col_i(new_nblocks))
+
+     if (sort_data) allocate(new_blk_d(new_nblocks))
 
      print *, "old,new nblocks=", nblocks, new_nblocks
      print *, ""
@@ -2082,6 +2095,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
              if (duplicates(old_blk) .eq. 0) THEN
                new_blk_p(new_blk) = blk_p(old_blk)
                new_col_i(new_blk) = col_i(old_blk)
+               if (sort_data) new_blk_d(new_blk) = blk_d(old_blk)
                new_blk=new_blk+1
              endif
            enddo
@@ -2104,6 +2118,11 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
         deallocate(blk_p)
         deallocate(col_i)
 
+        if (sort_data) then
+          deallocate(blk_d)
+          allocate(blk_d(nblocks))
+        endif
+
         allocate(blk_p(nblocks))
         allocate(col_i(nblocks))
 
@@ -2115,6 +2134,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
         do new_blk = 1,nblocks
            blk_p(new_blk) = new_blk_p(new_blk)
            col_i(new_blk) = new_col_i(new_blk)
+           if (sort_data) blk_d(new_blk) = new_blk_d(new_blk)
         ENDDO
         !$OMP END DO
 
@@ -2126,6 +2146,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       deallocate(new_blk_p)
       deallocate(new_col_i)
       deallocate(tmp_row_p)
+      if (sort_data) deallocate(new_blk_d)
 
       print *, "Done!"
 
