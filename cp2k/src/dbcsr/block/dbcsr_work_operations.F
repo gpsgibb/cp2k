@@ -2170,6 +2170,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
         ENDDO
         !$OMP END DO
 
+        !update the total number of elements (new_nze in merge_all) to account for removed blocks
         !$OMP ATOMIC
          n_elements = n_elements + local_elements
         !$OMP END ATOMIC
@@ -2210,9 +2211,20 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       ls=src_blk
       us=src_blk+size-1
 
-    !  print *, ld, ud, ls,us
-
-      dst_area%d%r_dp(ld:ud) = dst_area%d%r_dp(ld:ud) + src_area%d%r_dp(ls:us)
+      select case (dst_area%d%data_type)
+      case (dbcsr_type_real_4)
+        dst_area%d%r_sp(ld:ud) = dst_area%d%r_sp(ld:ud) + src_area%d%r_sp(ls:us)
+      case (dbcsr_type_real_8)
+        dst_area%d%r_dp(ld:ud) = dst_area%d%r_dp(ld:ud) + src_area%d%r_dp(ls:us)
+      case (dbcsr_type_complex_4)
+        dst_area%d%c_sp(ld:ud) = dst_area%d%c_sp(ld:ud) + src_area%d%c_sp(ls:us)
+      case (dbcsr_type_complex_8)
+        dst_area%d%c_dp(ld:ud) = dst_area%d%c_dp(ld:ud) + src_area%d%c_dp(ls:us)
+      case default
+        print *, "Error: Invalid or not-implemented dbcsr_data type!"
+        print *, "Selected type=",dst_area%d%data_type
+        error stop
+      end select
 
     end subroutine
 
