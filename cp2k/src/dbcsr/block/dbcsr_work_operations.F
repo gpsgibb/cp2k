@@ -1650,7 +1650,8 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
                              duplicates = duplicates, nrows = nrows, &
                              sort_data=sort_data, blk_d=blk_d, &
                              data_areas=all_data_areas, &
-                             n_elements=new_nze)
+                             n_elements=new_nze, &
+                             cbs=cbs, rbs=rbs)
       !
       ! The data is then merged in one of two ways.
       !
@@ -2003,7 +2004,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
    ! 2) merge duplicates into one block in one work matrix
    ! 3) remove duplicate blocks from matrix data area
    subroutine remove_duplicates(row_p, blk_p, col_i, nblocks, duplicates, nrows,&
-                                sort_data, blk_d, data_areas, n_elements)
+                                sort_data, blk_d, data_areas, n_elements, cbs, rbs)
      integer, dimension(:), intent(inout) :: row_p
      integer, allocatable, dimension(:), intent(inout), target :: blk_p
      integer, allocatable, dimension(:), intent(inout), target :: col_i
@@ -2015,6 +2016,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
      TYPE(dbcsr_data_obj), DIMENSION(:), &
         intent(in)                                            :: data_areas
      integer, intent(inout)  :: n_elements
+     integer, dimension(*), intent(in) :: cbs, rbs
 
      integer, allocatable, dimension(:), target, save :: new_blk_p
      integer, allocatable, dimension(:), target, save :: new_col_i
@@ -2026,6 +2028,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
      integer :: new_blk_i, new_blk_f, new_blk
      integer :: n
      integer, save :: new_nblocks
+     integer :: block_size
 
      integer :: local_elements !number of elements processed by the thread
 
@@ -2117,14 +2120,18 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 
              else
                !we need to merge blocks
+
+               block_size=rbs(row)*cbs(col_i(old_blk))
+
+
                print *, "moving data from", blk_d(old_blk), "->",  new_blk_d(new_blk-1)
                call merge_blocks(dst_area=data_areas(new_blk_d(new_blk-1)),&
                                  dst_blk=new_blk_p(new_blk-1), &
                                  src_area=data_areas(blk_d(old_blk)),&
                                  src_blk=blk_p(old_blk), &
-                                 size=4)
+                                 size=block_size)
                !! NEED TO CHANGE THIS TO REFLECT BLOCK SIZE
-               local_elements=local_elements-4
+               local_elements=local_elements-block_size
              endif
            enddo
            if (new_blk -1 .ne. new_blk_f) print *, "Whoops!", row, new_blk_f, new_blk
