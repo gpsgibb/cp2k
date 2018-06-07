@@ -203,7 +203,7 @@ CONTAINS
       INTEGER, DIMENSION(:), POINTER                     :: c_local_cols, c_local_rows
 
 !$    INTEGER, DIMENSION(:), POINTER           :: product_thread_dist
-integer :: i
+integer :: i, ii
 !   ---------------------------------------------------------------------------
 
       CALL timeset(routineN, handle)
@@ -245,9 +245,16 @@ integer :: i
       this%flop = INT(0, int_8)
       allocate(this%product_wm(0:nthreads-1))
      do i=0,nthreads-1
-        print *, "setting work matrix pointer for thread", i
+        !print *, "setting work matrix pointer for thread", i
         !this%product_wm => product%wms(ithread+1)
         this%product_wm(i)%ptr => product%wms(i+1)
+        !print*, "wmsize", i,product%wms(i+1)%datasize
+        !print*, product%wms(i+1)%lastblk
+        !ii=product%wms(i+1)%lastblk
+        !print*, product%wms(i+1)%row_i(1:ii)
+        !print*, product%wms(i+1)%col_i(1:ii)
+        !print*, product%wms(i+1)%blk_p(1:ii)
+         !print *, "data=", product%wms(i+1)%data_area%d%r_sp(1:ii*16)
      enddo
 
 
@@ -322,11 +329,11 @@ integer :: i
 !$    nthreads= OMP_GET_NUM_THREADS()
 
   allocate (this%csr(0:nthreads-1))
-    print*, "multrec_init",ithread, nthreads
+    !print*, "multrec_init",ithread, nthreads
 
 
     DO i=0,nthreads-1
-          print *, "i=",i," ithread=",omp_get_thread_num(),"initialising CSR"
+        !  print *, "i=",i," ithread=",omp_get_thread_num(),"initialising CSR"
           CALL dbcsr_mm_csr_init(this%csr(i), &
                                  left=left, right=right, product=product, &
                                  m_sizes=this%m_sizes, n_sizes=this%n_sizes, &
@@ -371,6 +378,7 @@ integer :: i
       INTEGER                                            :: t_a_f, t_a_l, t_b_f, t_b_l
       INTEGER, DIMENSION(:), POINTER                     :: k_locals
       integer :: d, i
+      integer :: ii
 
 !   ---------------------------------------------------------------------------
 
@@ -410,7 +418,9 @@ integer :: i
 !!$    ENDIF
 open (unit=20,file="TASKRANGES")
 open (unit=30,file="csrmultiplythreads")
-
+      !print *, "multrec_multiply", left%nblkrows_local, right%nblkcols_local, SIZE(k_locals)
+      !print *, "Multrec_multiply", t_a_f, t_a_l, left%coo_l
+      !print*, "Multrec_multiply", t_b_f, t_b_l, right%coo_l
       d=0
       !$OMP TASKGROUP
       CALL sparse_multrec(this, left, right, &
@@ -422,7 +432,7 @@ open (unit=30,file="csrmultiplythreads")
                           d)
       !$OMP END TASKGROUP
 
-print *, "Sparse multrec done"
+!print *, "Sparse multrec done"
 
 !$OMP END MASTER
 
@@ -435,7 +445,7 @@ close(30)
 !$OMP END MASTER
 
 !$ ithread=omp_get_thread_num()
-print*, "ithread=",ithread
+!print*, "ithread=",ithread
       CALL dbcsr_mm_csr_purge_stacks(this%csr(ithread), left, right)
 
 !$OMP BARRIER
@@ -443,6 +453,20 @@ print*, "ithread=",ithread
 !$OMP MASTER
 
       flop = flop+this%flop
+      nthreads=OMP_GET_NUM_THREADS()
+      !do i=0,nthreads-1
+      !  print *, "work matrix data for", i
+        !this%product_wm => product%wms(ithread+1)
+        !this%product_wm(i)%ptr => product%wms(i+1)
+       ! print*, "wmsize", i,this%product_wm(i)%ptr%datasize
+       ! print*, this%product_wm(i)%ptr%lastblk
+        ii=this%product_wm(i)%ptr%lastblk
+        
+        !print*, this%product_wm(i)%ptr%row_i(1:ii)
+        !print*, this%product_wm(i)%ptr%col_i(1:ii)
+        !print*, this%product_wm(i)%ptr%blk_p(1:ii)
+        ! print *, "data=", this%product_wm(i)%ptr%data_area%d%r_sp(1:ii*16)
+     !enddo
 !$OMP END MASTER
 
 !$OMP BARRIER
@@ -516,7 +540,7 @@ print*, "ithread=",ithread
          !$ nthreads=omp_get_num_threads()
 
          do i=0,nthreads-1
-           print *, "Finalizing CSR for thread",i, " of",nthreads
+        !   print *, "Finalizing CSR for thread",i, " of",nthreads
            CALL dbcsr_mm_csr_finalize(this%csr(i))
          enddo
 
@@ -549,6 +573,7 @@ print*, "ithread=",ithread
 
          ! if filtering is requested remove small blocks, unless the sparsity needs to be kept
          IF (this%use_eps .AND. .NOT. this%keep_sparsity) THEN
+            print *, "multrec filtering?"
             CALL multrec_filtering(this)
          ELSE
             do ithread=0,nthreads-1
@@ -747,6 +772,8 @@ print*, "ithread=",ithread
       !$ nthreads=omp_get_num_threads()
 
       d2=d+1
+      
+     ! print *,"sparse_multrec", d, ai, af, bi,bf, ithread
 
       condition = (ithread .eq. 0 ) .and. (d .eq. 3)
       !condition = .False.
@@ -793,6 +820,8 @@ print*, "ithread=",ithread
             ENDIF
 
             if (d .gt. 20) STOP "Depth too large"
+            
+           ! print *, "Cutting?"
 
             M = mf-mi+1
             N = nf-ni+1

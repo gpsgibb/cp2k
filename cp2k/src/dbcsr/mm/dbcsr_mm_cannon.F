@@ -705,7 +705,7 @@ CONTAINS
             blk = blks(row_img, col_img)
             blks(row_img, col_img) = blks(row_img, col_img)+1
             blk_ps(row_img, col_img) = blk_ps(row_img, col_img)+nze
-print*, blk_l,row_img,col_img,blk,stored_row
+!print*, blk_l,row_img,col_img,blk,stored_row
             ums%mats(row_img, col_img)%wms(1)%row_i(blk) = stored_row
             ums%mats(row_img, col_img)%wms(1)%col_i(blk) = stored_col
             ums%mats(row_img, col_img)%wms(1)%blk_p(blk) = &
@@ -1314,7 +1314,7 @@ print*, blk_l,row_img,col_img,blk,stored_row
       CALL local_filter(array_data(product_matrix%col_blk_size), array_size(product_matrix%local_cols), &
                         array_data(product_matrix%local_cols), n_sizes)
 
-      print*, "About to allocate multrec and call multrec_init"
+      !print*, "About to allocate multrec and call multrec_init"
       !
 !$OMP PARALLEL &
 !$OMP DEFAULT (NONE) &
@@ -1342,7 +1342,7 @@ print*, blk_l,row_img,col_img,blk,stored_row
                                  m_sizes=m_sizes, n_sizes=n_sizes)
 !$OMP END MASTER
 !$OMP END PARALLEL
-print*, "multrec_init done :)"
+!print*, "multrec_init done :)"
       !
       ! Setup indexing
       CALL setup_rec_index_2d(left_set, left_row_nimages, left_col_nimages)
@@ -1699,7 +1699,7 @@ print*, "multrec_init done :)"
                CALL dbcsr_mm_multrec_phaseout(multrec(ithread)%p)
 !!$OMP BARRIER
             CALL timeset(routineN//"_multrec", handle2)
-            !$ print *, "I am the master thread and I am thread number",omp_get_thread_num()
+!             !!$ print *, "I am the master thread and I am thread number",omp_get_thread_num()
 !$OMP END MASTER
 
             CALL dbcsr_mm_multrec_multiply(multrec(0)%p, &

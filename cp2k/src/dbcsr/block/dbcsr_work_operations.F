@@ -91,6 +91,7 @@ MODULE dbcsr_work_operations
                                               int_8,&
                                               real_4,&
                                               real_8
+   use dbcsr_data_types,                only: dbcsr_scalar_type
 #include "../../base/base_uses.f90"
 
 !$ USE OMP_LIB, ONLY: omp_get_max_threads, omp_get_thread_num, omp_get_num_threads, omp_in_parallel
@@ -1239,6 +1240,7 @@ CONTAINS
       LOGICAL, SAVE                                      :: mutable
       TYPE(dbcsr_data_obj)                               :: data_block
       TYPE(dbcsr_iterator)                               :: iter
+      type(dbcsr_scalar_type) :: scale
 
 !   ---------------------------------------------------------------------------
 
@@ -1249,6 +1251,34 @@ CONTAINS
       ithread = 0; nthreads = 1
 !$    ithread = omp_get_thread_num()
 !$    nthreads = omp_get_num_threads()
+
+!we need to duplicate the whole matrix in each work matrix, but in order to
+!get the correct value at the end (after merging blocks) we need to multiply
+!each copy of the matrix in the work matrices by 1/nthreads
+if (mt) then
+    !print *, "datatype=", wm(ithread+1)%data_area%d%data_type
+    if (wm(ithread+1)%data_area%d%data_type .eq. dbcsr_type_real_8) then
+    !   print *, "real8"
+       scale%data_type=dbcsr_type_real_8
+       scale%r_dp = 1./OMP_GET_NUM_THREADS()
+    else if (wm(ithread+1)%data_area%d%data_type .eq. dbcsr_type_real_4) then
+    !   print *, "real4"
+       scale%data_type=dbcsr_type_real_4
+       scale%r_sp = 1./OMP_GET_NUM_THREADS()
+    else if (wm(ithread+1)%data_area%d%data_type .eq. dbcsr_type_complex_8) then
+    !   print *, "cmplx8"
+       scale%data_type=dbcsr_type_complex_8
+       scale%c_dp = cmplx(1./OMP_GET_NUM_THREADS(),0)
+    else if (wm(ithread+1)%data_area%d%data_type .eq. dbcsr_type_complex_4) then
+    !   print *, "cmplx4"
+       scale%data_type=dbcsr_type_complex_4
+       scale%c_sp = cmplx(1./OMP_GET_NUM_THREADS(),0)
+    else
+       print *, "ERROR WRONG TYPE"
+       error stop
+    endif
+endif
+
       limit = PRESENT(limits)
       careful = size_used+size_used/8 &
                 .LT. dbcsr_data_get_size_referenced(matrix%data_area)
@@ -1284,8 +1314,8 @@ CONTAINS
          ENDIF
       ENDDO
       ! Now copy the data
-      CALL dbcsr_iterator_start(iter, matrix, shared=mt, &
-                                contiguous_pointers=.FALSE., read_only=.TRUE.)
+      CALL dbcsr_iterator_start(iter, matrix, shared=.false., & !was shared=mt
+                                contiguous_pointers=.FALSE., read_only=.TRUE.)!,dynamic=.true.)
       DO WHILE (dbcsr_iterator_blocks_left(iter))
          CALL dbcsr_iterator_next_block(iter, row, col, data_block, &
                                         transposed=tr, block_number=blk)
@@ -1305,10 +1335,18 @@ CONTAINS
                                            ABS(wblk_p)+nze-1, factor=default_resize_factor)
                CALL dbcsr_data_set_size_referenced(wm(which_wm)%data_area, &
                                                    ABS(wblk_p)+nze-1)
+               if (mt) then 
+               CALL dbcsr_data_set(wm(which_wm)%data_area, &
+                                   lb=ABS(wblk_p), &
+                                   data_size=nze, &
+                                   src=data_block, source_lb=1,scale=scale)
+               else
                CALL dbcsr_data_set(wm(which_wm)%data_area, &
                                    lb=ABS(wblk_p), &
                                    data_size=nze, &
                                    src=data_block, source_lb=1)
+               endif
+               
             ENDIF
          ELSE
             ! The data gets copied all at once so the block pointers
@@ -1485,10 +1523,20 @@ CONTAINS
          SAVE                                            :: all_data_areas
       TYPE(dbcsr_work_type), POINTER                     :: wm
       TYPE(i_array_p), DIMENSION(:), POINTER, SAVE       :: all_blk_p, all_col_i, all_row_p
+      integer :: nthreads
 
 !   ---------------------------------------------------------------------------
+      nthreads=1
+      !$ nthreads=OMP_GET_NUM_THREADS()
 
-      sort_data= .true.
+!Though this is not entirely necessary, if sort_data is not enabled (with
+!multiple threads) then our resulting matrix has many redudant blocks in its
+!data area, so it takes up more memory
+      if (nthreads .gt. 1) then
+        !$OMP ATOMIC write
+        sort_data= .true.
+        !$OMP END ATOMIC
+      endif
 
       CALL timeset(routineN, handle)
       !> \par Outline
@@ -1503,8 +1551,7 @@ CONTAINS
       IF (dbg) WRITE (*, *) routineN//" starting, sort?", sort_data
 !$OMP     BARRIER
 
-print *, "am I parallel?", OMP_GET_NUM_THREADS()
-!stop
+
       nrows = matrix%nblkrows_total
       nwms = SIZE(matrix%wms)
 !$    IF (nwms /= OMP_GET_NUM_THREADS()) &
@@ -1539,14 +1586,14 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       ALLOCATE (all_blk_p(nwms))
       ALLOCATE (all_data_sizes(0:nwms))
       ALLOCATE (all_data_offsets(nwms))
-      IF (sort_data) ALLOCATE (all_data_areas(0:nwms))
-      IF (sort_data) THEN
+      ALLOCATE (all_data_areas(0:nwms))
+
          CALL dbcsr_data_init(all_data_areas(0))
          all_data_areas(0) = matrix%data_area
 !$OMP        CRITICAL (crit_data)
          CALL dbcsr_data_hold(all_data_areas(0))
 !$OMP        END CRITICAL (crit_data)
-      ENDIF
+
       ! The following is valid because the data actually referenced
       ! by blocks is explicitly calculated in dbcsr_finalize.
       all_data_sizes(0) = matrix%nze
@@ -1560,6 +1607,8 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       ELSE
          wm_datasize = wm%datasize
       ENDIF
+       !print*, "wm datasize", omp_get_thread_num(), wm%datasize, matrix%nze
+      
       nblks = wm%lastblk
 !$OMP     ATOMIC
       new_nblks = new_nblks+nblks
@@ -1568,17 +1617,17 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 !$OMP     BARRIER
       !
 !$OMP     MASTER
-      print *, "new_nblks", new_nblks
-      print *, "new_nze", new_nze
+  !    print *, "new_nblks", new_nblks
+  !    print *, "new_nze", new_nze
       ALLOCATE (new_row_p(nrows+1))
       ALLOCATE (new_col_i(new_nblks))
       ALLOCATE (new_blk_p(new_nblks))
       allocate(duplicates(new_nblks))
-      IF (sort_data) THEN
+      !IF (sort_data) THEN
          ALLOCATE (blk_d(new_nblks))
-      ELSE
-         ALLOCATE (blk_d(1))
-      ENDIF
+      !ELSE
+      !   ALLOCATE (blk_d(1))
+      !ENDIF
 !$OMP     END MASTER
       !
       ! Each thread creates a row_p index for its new blocks.  This gives the
@@ -1591,7 +1640,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       ! among themselves.
       all_row_p(which_wm)%p => my_row_p
       all_data_sizes(which_wm) = wm_datasize
-!$ print *, omp_get_thread_num(),wm%datasize,dbcsr_data_get_size_referenced(wm%data_area)
+!!$ print *, omp_get_thread_num(),wm%datasize,dbcsr_data_get_size_referenced(wm%data_area)
 !$OMP BARRIER
       IF (.NOT. sort_data) THEN
          IF (wm_datasize > dbcsr_data_get_size_referenced(wm%data_area)) &
@@ -1604,12 +1653,13 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 !$OMP        MASTER
          all_data_offsets(:) = 0
 !$OMP        END MASTER
+      endif
          CALL dbcsr_data_init(all_data_areas(which_wm))
          all_data_areas(which_wm) = wm%data_area
 !$OMP        CRITICAL (crit_data)
          CALL dbcsr_data_hold(all_data_areas(which_wm))
 !$OMP        END CRITICAL (crit_data)
-      ELSE
+      if (.not. sort_data) then
 !$OMP        MASTER
          all_data_offsets(1) = all_data_sizes(0)
          DO t = 2, nwms
@@ -1651,8 +1701,8 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
                              sort_data=sort_data, blk_d=blk_d, &
                              data_areas=all_data_areas, &
                              n_elements=new_nze, &
-                             cbs=cbs, rbs=rbs)
-      !
+                             cbs=cbs, rbs=rbs, offsets=all_data_offsets)
+      
       ! The data is then merged in one of two ways.
       !
 !$OMP     MASTER
@@ -1742,12 +1792,15 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       DEALLOCATE (all_blk_p)
       DEALLOCATE (new_row_p)
       DEALLOCATE (new_col_i)
+      !print*, "new_blk_p allocated?", allocated(new_blk_p)
       DEALLOCATE (new_blk_p)
       DEALLOCATE (all_data_sizes)
       DEALLOCATE (all_data_offsets)
+      !print*, "Duplicates allocated?", allocated(duplicates)
       deallocate(duplicates)
+      DEALLOCATE (all_data_areas)
       IF (sort_data) THEN
-         DEALLOCATE (all_data_areas)
+
          DEALLOCATE (new_blk_sizes)
          DEALLOCATE (new_blk_p_sorted)
       ENDIF
@@ -1876,7 +1929,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       INTEGER, DIMENSION(*), INTENT(OUT), TARGET         :: new_col_i, new_blk_p
       INTEGER, DIMENSION(*), INTENT(IN), TARGET          :: blk_d
       INTEGER, DIMENSION(*), INTENT(IN)                  :: old_row_p, old_col_i, old_blk_p
-      integer, dimension(*), intent(inout)               :: duplicates
+      integer, dimension(:), intent(inout)               :: duplicates
       TYPE(i_array_p), DIMENSION(*), INTENT(IN)          :: all_row_p, all_col_i, all_blk_p
       INTEGER, DIMENSION(*), INTENT(IN)                  :: all_data_offsets
       INTEGER, INTENT(IN)                                :: nwms, nrows, max_row_count
@@ -1901,6 +1954,12 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
       !allocate(duplicates(max_row_count,nrows))
       !duplicates=0
 
+!!$OMP Master
+!print *, "size of duplicates=",size(duplicates)
+!print *, "max num of blocks=", new_row_p(nrows+1)
+!print *, "Merge index:"
+!!$OMP END MASTER
+!!$OMP BARRIER
 
       !
 !$OMP     DO
@@ -1909,9 +1968,10 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
          last_row_blk = new_row_p(row+1) !get block number for last member in row
          col_span => new_col_i(first_row_blk:last_row_blk) !columns in this row
          blk_span => new_blk_p(first_row_blk:last_row_blk) !blocks in this row
-         IF (sort_data) d_span => blk_d(first_row_blk:last_row_blk)
+         d_span => blk_d(first_row_blk:last_row_blk)
          src_blk_1 = old_row_p(row)+1
          src_blk_2 = old_row_p(row+1)
+        ! print *, "matrix, row", row, src_blk_1, src_blk_2, src_blk_2-src_blk_1
         ! print* , row,OMP_GET_THREAD_NUM(),src_blk_1,src_blk_2
          !fill in existing blocks in matrix (shouldn't be any)
          blk1 = 1
@@ -1923,6 +1983,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
             DO t = 1, nwms
                src_blk_1 = all_row_p(t)%p(row)+1
                src_blk_2 = all_row_p(t)%p(row+1)
+              ! print *, "wm, row", t-1, row, src_blk_1, src_blk_2, src_blk_2-src_blk_1
                blk1 = blk2+1
                blk2 = blk1+(src_blk_2-src_blk_1+1)-1
                col_span(blk1:blk2) = all_col_i(t)%p(src_blk_1:src_blk_2)
@@ -1933,11 +1994,13 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
             DO t = 1, nwms
                src_blk_1 = all_row_p(t)%p(row)+1 !first block in wm row
                src_blk_2 = all_row_p(t)%p(row+1) !last block in wm row
+               !print *, "wm, row", t-1, row, src_blk_1, src_blk_2
                blk1 = blk2+1 !bock numbering for global row
                blk2 = blk1+(src_blk_2-src_blk_1+1)-1
                col_span(blk1:blk2) = all_col_i(t)%p(src_blk_1:src_blk_2)
                blk_span(blk1:blk2) = all_blk_p(t)%p(src_blk_1:src_blk_2) &
                     &              +all_data_offsets(t)
+               d_span(blk1:blk2) = t+1
             ENDDO
          ENDIF
          !if (row .eq. 5) print *, row,"pre-sort col_span", col_span
@@ -1948,34 +2011,43 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
          blk_span(1:SIZE(blk_span)) = blk_p_buff(tmp_arr(1:SIZE(blk_span))) !sort columns in row
 
          !if we  want sort_data then we also need to sort d_span so that the blocks point to the correct work matrix.
-         if (sort_data) then
+         !if (sort_data) then
              blk_p_buff(1:size(blk_span)) = d_span(:)
              d_span(1:size(blk_span)) = blk_p_buff(tmp_arr(1:SIZE(blk_span)))
-         endif
+         !endif
          !if (row .eq. 5) print*,row,"blk_span", blk_span(1:SIZE(blk_span))
         !check for duplicates
-
-        duplicates(first_row_blk) = 0
-         do t=2,size(col_span)
-           if (col_span(t-1) .eq. col_span(t)) THEN
-             print *, "duplicate: row,col=", row,col_span(t)
-             !blk_span(t) = blk_span(t-1)
-             duplicates(first_row_blk+t-1) = 1
-           ELSE
-             duplicates(first_row_blk+t-1) = 0
-           endif
-        enddo
+        !print*, "row=", row, " col size=", size(col_span)
+        if (size(col_span) .gt. 0) then !we only want to do this if we have a non-empty row
+          duplicates(first_row_blk) = 0
+          do t=2,size(col_span)
+             if (col_span(t-1) .eq. col_span(t)) THEN
+            !   print *, "duplicate: row,col=", row,col_span(t)
+               !blk_span(t) = blk_span(t-1)
+               duplicates(first_row_blk+t-1) = 1
+             ELSE
+               duplicates(first_row_blk+t-1) = 0
+             endif
+          enddo
+        endif
       ENDDO
 !$OMP     END DO
 
 !$OMP BARRIER
 
 !$OMP MASTER
-      do t=1,nwms
-        print *, "wm,data_offset", t, all_data_offsets(t)
+    do row=1,nrows
+      do t=new_row_p(row)+1,new_row_p(row+1)
+    !  print*, row, t, new_blk_p(t)
+         if (new_blk_p(t) .lt. 0) error stop "NEGATIVE"
       enddo
+    enddo
+        
+      !do t=1,nwms
+      !  print *, "wm,data_offset", t, all_data_offsets(t)
+      !enddo
 
-      print*, "number of duplicates=", sum(duplicates(1:new_row_p(nrows+1)))
+      !print*, "number of duplicates=", sum(duplicates(1:new_row_p(nrows+1)))
 !$OMP END MASTER
       !
       DEALLOCATE (tmp_arr)
@@ -2004,10 +2076,11 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
    ! 2) merge duplicates into one block in one work matrix
    ! 3) remove duplicate blocks from matrix data area
    subroutine remove_duplicates(row_p, blk_p, col_i, nblocks, duplicates, nrows,&
-                                sort_data, blk_d, data_areas, n_elements, cbs, rbs)
+                                sort_data, blk_d, data_areas, n_elements, cbs, rbs,&
+                                offsets)
      integer, dimension(:), intent(inout) :: row_p
-     integer, allocatable, dimension(:), intent(inout), target :: blk_p
-     integer, allocatable, dimension(:), intent(inout), target :: col_i
+     integer, allocatable, dimension(:), intent(inout) :: blk_p
+     integer, allocatable, dimension(:), intent(inout) :: col_i
      integer, intent(inout) :: nblocks
      integer, dimension(:), intent(in) :: duplicates
      integer, intent(in)     :: nrows
@@ -2017,6 +2090,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
         intent(in)                                            :: data_areas
      integer, intent(inout)  :: n_elements
      integer, dimension(*), intent(in) :: cbs, rbs
+     integer, dimension(:), intent(in) :: offsets
 
      integer, allocatable, dimension(:), target, save :: new_blk_p
      integer, allocatable, dimension(:), target, save :: new_col_i
@@ -2032,15 +2106,17 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 
      integer :: local_elements !number of elements processed by the thread
 
+     integer :: offset_src, offset_dst
+
 
      !$OMP Master
-     print*, ""
-     print*, "-----------------------------------------"
-     print*, "- Entering subroutine remove duplicates -"
-     print *, "N_elements=",n_elements
-     print*, "-----------------------------------------"
+     !print*, ""
+     !print*, "-----------------------------------------"
+     !print*, "- Entering subroutine remove duplicates -"
+     !print *, "N_elements=",n_elements
+     !print*, "-----------------------------------------"
 
-     if (.not. sort_data) error stop "you must set sort_data=.true. for now"
+     !if (.not. sort_data) error stop "you must set sort_data=.true. for now"
 
      allocate(tmp_row_p(nrows+1))
 
@@ -2049,10 +2125,11 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
      allocate(new_blk_p(new_nblocks))
      allocate(new_col_i(new_nblocks))
 
-     if (sort_data) allocate(new_blk_d(new_nblocks))
+     !if (sort_data) allocate(new_blk_d(new_nblocks))
+     allocate(new_blk_d(new_nblocks))
 
-     print *, "old,new nblocks=", nblocks, new_nblocks
-     print *, ""
+     !print *, "old,new nblocks=", nblocks, new_nblocks
+     !print *, ""
 
      !n_elements=0
 
@@ -2065,6 +2142,9 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 
      !if we have duplicates then do this else don't bothere cos there are none to remove
      if (new_nblocks .ne. nblocks) then
+      !$OMP MASTER
+      write(*,"(a,i5,a)") " Need to remove ",nblocks-new_nblocks,"  duplicates"
+      !$OMP END MASTER
 
         !count number of blocks in each row in new index
 
@@ -2079,7 +2159,7 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
                   n=n+1
                 endif
               enddo
-              print *, "row", row," has", n, " new elements"
+              !print *, "row", row," has", n, " new elements"
 
               tmp_row_p(row) = n
          enddo
@@ -2090,10 +2170,10 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
          ! rebuild temporary(new) row_p index
          !$OMP MASTER
          CALL dbcsr_build_row_index(tmp_row_p, nrows)
-         print *, "tmp_row_p = ..."
-         do row=1,nrows+1
-           print *, row, tmp_row_p(row)
-         enddo
+        ! print *, "tmp_row_p = ..."
+         !do row=1,nrows+1
+        !   print *, row, tmp_row_p(row)
+        ! enddo
          !$OMP END MASTER
 
          !$OMP BARRIER
@@ -2112,9 +2192,12 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
            !loop over old blocks, check for duplicate. If not, add into new block
            do old_blk=old_blk_i,old_blk_f
              if (duplicates(old_blk) .eq. 0) THEN
+
+               !this is not a duplicate - append it to our new indices
                new_blk_p(new_blk) = blk_p(old_blk)
                new_col_i(new_blk) = col_i(old_blk)
-               if (sort_data) new_blk_d(new_blk) = blk_d(old_blk)
+               !if (sort_data) new_blk_d(new_blk) = blk_d(old_blk)
+               new_blk_d(new_blk) = blk_d(old_blk)
                new_blk=new_blk+1
 
 
@@ -2123,12 +2206,17 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 
                block_size=rbs(row)*cbs(col_i(old_blk))
 
+               offset_src=offsets(blk_d(old_blk)-1)
+               offset_dst=offsets(new_blk_d(new_blk-1)-1)
 
-               print *, "moving data from", blk_d(old_blk), "->",  new_blk_d(new_blk-1)
+              !print *, offset_src, offset_dst
+
+
+               !print *, "moving data from", blk_d(old_blk), "->",  new_blk_d(new_blk-1)
                call merge_blocks(dst_area=data_areas(new_blk_d(new_blk-1)),&
-                                 dst_blk=new_blk_p(new_blk-1), &
+                                 dst_blk=new_blk_p(new_blk-1)-offset_dst, &
                                  src_area=data_areas(blk_d(old_blk)),&
-                                 src_blk=blk_p(old_blk), &
+                                 src_blk=blk_p(old_blk)-offset_src, &
                                  size=block_size)
                !! NEED TO CHANGE THIS TO REFLECT BLOCK SIZE
                local_elements=local_elements-block_size
@@ -2149,13 +2237,16 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
 
       !  if (nblocks .gt. 1) error stop "should be the final matrix"
 
-        print *, "Replacing old indices with new ones..."
+      !  print *, "Replacing old indices with new ones..."
 
         row_p(1:nrows+1) = tmp_row_p(1:nrows+1)
-        nblocks=new_nblocks
 
+        !print*, "Am I deallocating stuff?"
+        !call flush()
         deallocate(blk_p)
         deallocate(col_i)
+
+        nblocks=new_nblocks
 
         if (sort_data) then
           deallocate(blk_d)
@@ -2177,28 +2268,35 @@ print *, "am I parallel?", OMP_GET_NUM_THREADS()
         ENDDO
         !$OMP END DO
 
+        if (sort_data) then
         !update the total number of elements (new_nze in merge_all) to account for removed blocks
         !$OMP ATOMIC
          n_elements = n_elements + local_elements
         !$OMP END ATOMIC
+      endif
 
         !$OMP BARRIER
 
+    ELSE
+      !$OMP MASTER
+      !print *, "No need to remove duplicates"
+      !$OMP END MASTER
     endif
 
       !$OMP MASTER
       deallocate(new_blk_p)
       deallocate(new_col_i)
       deallocate(tmp_row_p)
-      if (sort_data) deallocate(new_blk_d)
+      !if (sort_data) deallocate(new_blk_d)
+      deallocate(new_blk_d)
 
-      print *, "Done!"
+      !print *, "Done!"
 
-      print*, "-----------------------------------------"
-      print*, "- exiting subroutine remove duplicates  -"
-      print*, "N_elements=",n_elements
-      print*, "-----------------------------------------"
-      print*, ""
+      !print*, "-----------------------------------------"
+      !print*, "- exiting subroutine remove duplicates  -"
+      !print*, "N_elements=",n_elements
+      !print*, "-----------------------------------------"
+      !print*, ""
       !$OMP END MASTER
       !$OMP BARRIER
       !stop

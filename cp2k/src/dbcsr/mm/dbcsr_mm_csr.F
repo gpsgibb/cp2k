@@ -626,7 +626,7 @@ CONTAINS
          ENDDO
       ENDDO
       DEALLOCATE (flop_list, flop_index, tmp_descr)
-      PRINT *, "csr_init: ithread=",ithread
+      !PRINT *, "csr_init: ithread=",ithread
       this%product_wm => product%wms(ithread+1)
       CALL dbcsr_mm_sched_init(this%sched, &
                                product_wm=this%product_wm, &

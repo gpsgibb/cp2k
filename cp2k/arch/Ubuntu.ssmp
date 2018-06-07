@@ -15,7 +15,7 @@ DFLAGS     =
 CPPFLAGS   = -g -O0 
 FCFLAGS    = $(DFLAGS) -O0 -ffree-form -ffree-line-length-none\
              -fopenmp\
-             -mtune=native -g -fbacktrace -fbounds-check
+             -mtune=native -g -fbacktrace -fcheck=all
 
 LDFLAGS    = $(FCFLAGS) -static
 LIBS       = /usr/lib/libopenblas.a\
