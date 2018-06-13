@@ -1275,7 +1275,7 @@ if (mt) then
        scale%c_sp = cmplx(1./OMP_GET_NUM_THREADS(),0)
     else
        print *, "ERROR WRONG TYPE"
-       error stop
+       stop
     endif
 endif
 
@@ -1335,7 +1335,7 @@ endif
                                            ABS(wblk_p)+nze-1, factor=default_resize_factor)
                CALL dbcsr_data_set_size_referenced(wm(which_wm)%data_area, &
                                                    ABS(wblk_p)+nze-1)
-               if (mt) then 
+               if (mt) then
                CALL dbcsr_data_set(wm(which_wm)%data_area, &
                                    lb=ABS(wblk_p), &
                                    data_size=nze, &
@@ -1346,7 +1346,7 @@ endif
                                    data_size=nze, &
                                    src=data_block, source_lb=1)
                endif
-               
+
             ENDIF
          ELSE
             ! The data gets copied all at once so the block pointers
@@ -1608,7 +1608,7 @@ endif
          wm_datasize = wm%datasize
       ENDIF
        !print*, "wm datasize", omp_get_thread_num(), wm%datasize, matrix%nze
-      
+
       nblks = wm%lastblk
 !$OMP     ATOMIC
       new_nblks = new_nblks+nblks
@@ -1702,7 +1702,7 @@ endif
                              data_areas=all_data_areas, &
                              n_elements=new_nze, &
                              cbs=cbs, rbs=rbs, offsets=all_data_offsets)
-      
+
       ! The data is then merged in one of two ways.
       !
 !$OMP     MASTER
@@ -2039,10 +2039,10 @@ endif
     do row=1,nrows
       do t=new_row_p(row)+1,new_row_p(row+1)
     !  print*, row, t, new_blk_p(t)
-         if (new_blk_p(t) .lt. 0) error stop "NEGATIVE"
+         if (new_blk_p(t) .lt. 0) stop "NEGATIVE"
       enddo
     enddo
-        
+
       !do t=1,nwms
       !  print *, "wm,data_offset", t, all_data_offsets(t)
       !enddo
@@ -2328,7 +2328,7 @@ endif
       case default
         print *, "Error: Invalid or not-implemented dbcsr_data type!"
         print *, "Selected type=",dst_area%d%data_type
-        error stop
+        stop
       end select
 
     end subroutine
