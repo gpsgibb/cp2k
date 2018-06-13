@@ -416,8 +416,8 @@ integer :: i, ii
 !!$       t_a_f = left%thr_c(ithread+1)+1
 !!$       t_a_l = left%thr_c(ithread+2)
 !!$    ENDIF
-open (unit=20,file="TASKRANGES")
-open (unit=30,file="csrmultiplythreads")
+!open (unit=20,file="TASKRANGES")
+!open (unit=30,file="csrmultiplythreads")
       !print *, "multrec_multiply", left%nblkrows_local, right%nblkcols_local, SIZE(k_locals)
       !print *, "Multrec_multiply", t_a_f, t_a_l, left%coo_l
       !print*, "Multrec_multiply", t_b_f, t_b_l, right%coo_l
@@ -440,8 +440,8 @@ open (unit=30,file="csrmultiplythreads")
 !$OMP BARRIER
 
 !$OMP Master
-close (20)
-close(30)
+!close (20)
+!close(30)
 !$OMP END MASTER
 
 !$ ithread=omp_get_thread_num()
@@ -461,7 +461,7 @@ close(30)
        ! print*, "wmsize", i,this%product_wm(i)%ptr%datasize
        ! print*, this%product_wm(i)%ptr%lastblk
         ii=this%product_wm(i)%ptr%lastblk
-        
+
         !print*, this%product_wm(i)%ptr%row_i(1:ii)
         !print*, this%product_wm(i)%ptr%col_i(1:ii)
         !print*, this%product_wm(i)%ptr%blk_p(1:ii)
@@ -764,6 +764,7 @@ close(30)
       INTEGER :: ithread, nthreads, d2
       logical :: condition
       integer :: mf1, mi2, acut1, acut2, nf1, ni2, bcut1, bcut2
+      real :: depthcond
       !   ---------------------------------------------------------------------------
 
       ithread=0
@@ -772,10 +773,14 @@ close(30)
       !$ nthreads=omp_get_num_threads()
 
       d2=d+1
-      
-     ! print *,"sparse_multrec", d, ai, af, bi,bf, ithread
 
-      condition = (ithread .eq. 0 ) .and. (d .eq. 3)
+      depthcond = log(10.*nthreads)/log(2.)
+
+
+     ! print *,"sparse_multrec", d, ai, af, bi,bf, ithread
+      !print *, "depthcond=", depthcond
+      condition = (ithread .eq. 0 ) .and. (d .eq. nint(depthcond))
+      if (condition) print *, "condition", d, depthcond
       !condition = .False.
 
       !print *, "DEPTH=", d, " ithread=", ithread, "nthreads=",nthreads, "condition=", condition
@@ -796,12 +801,12 @@ close(30)
             ENDIF
 
 
-            !IF (af-ai+1 <= dbcsr_cfg%multrec_limit .AND. bf-bi+1 <= dbcsr_cfg%multrec_limit) THEN
+            IF (af-ai+1 <= dbcsr_cfg%multrec_limit .AND. bf-bi+1 <= dbcsr_cfg%multrec_limit) THEN
             !print *, d, af, ai, bf, bi, af-ai+1, bf-bi+1
-            IF (af-ai+1 <= 16 .AND. bf-bi+1 <= 16) THEN
+            !IF (af-ai+1 <= 16 .AND. bf-bi+1 <= 16) THEN
                IF (af-ai+1 .GT. 0 .AND. bf-bi+1 .GT. 0) THEN
                   !print*, "max chunk size is", dbcsr_cfg%multrec_limit
-                  write(30,*) ithread,af-ai+1,bf-bi+1,mi,mf,ni,nf,ki,kf,ai,af,bi,bf
+                  !write(30,*) ithread,af-ai+1,bf-bi+1,mi,mf,ni,nf,ki,kf,ai,af,bi,bf
                   !print *, "chunk is small enough", mi,mf,ni,nf,ki,kf
                               CALL dbcsr_mm_csr_multiply(this%csr(ithread), left, right, &
                                              mi=mi, mf=mf, ni=ni, nf=nf, ki=ki, kf=kf, &
@@ -819,8 +824,8 @@ close(30)
                RETURN
             ENDIF
 
-            if (d .gt. 20) STOP "Depth too large"
-            
+            !if (d .gt. 20) STOP "Depth too large"
+
            ! print *, "Cutting?"
 
             M = mf-mi+1
@@ -846,13 +851,13 @@ close(30)
                mf1=mi+s1-1
                acut1=acut-1
               !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf1,ni,nf,ki,kf,ai,acut1,bi,bf,d2)
-              if (condition) write(20,*) "m",omp_get_thread_num(),mi,mf1,ni,nf,ki,kf
+              !if (condition) write(20,*) "m",omp_get_thread_num(),mi,mf1,ni,nf,ki,kf
                CALL sparse_multrec(this, left, right, mi, mf1, ni, nf, ki, kf, &
                                    ai, acut1, a_index, bi, bf, b_index, d2)
               !$OMP END TASK
               mi2=mi+s1
               !$OMP TASK if(condition) FIRSTPRIVATE(mi2,mf,ni,nf,ki,kf,acut,af,bi,bf,d2)
-              if (condition) write(20,*) "m",omp_get_thread_num(),mi2,mf,ni,nf,ki,kf
+              !if (condition) write(20,*) "m",omp_get_thread_num(),mi2,mf,ni,nf,ki,kf
                CALL sparse_multrec(this, left, right, mi2, mf, ni, nf, ki, kf, &
                                    acut, af, a_index, bi, bf, b_index, d2)
               !$OMP END TASK
@@ -873,10 +878,10 @@ close(30)
                   WRITE (*, '(3(I7))') b_index
                ENDIF
                !print *, "cut K", acut,bcut
-               if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki,ki+s1-1
+               !if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki,ki+s1-1
                CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
                                    ai, acut-1, a_index, bi, bcut-1, b_index, d2)
-               if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki+s1,kf
+               !if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki+s1,kf
                CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
                                    acut, af, a_index, bcut, bf, b_index, d2)
             CASE (3)
@@ -891,13 +896,13 @@ close(30)
               nf1=ni+s1-1
               bcut1=bcut-1
               !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf,ni,nf1,ki,kf,ai,af,bi,bcut1,d2)
-              if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni,nf1,ki,kf
+              !if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni,nf1,ki,kf
                CALL sparse_multrec(this, left, right, mi, mf, ni, nf1, ki, kf, &
                                    ai, af, a_index, bi, bcut1, b_index, d2)
               !$OMP END TASK
               ni2=ni+s1
               !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf,ni2,nf,ki,kf,ai,af,bcut,bf,d2)
-              if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni2,nf,ki,kf
+              !if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni2,nf,ki,kf
                CALL sparse_multrec(this, left, right, mi, mf, ni2, nf, ki, kf, &
                                    ai, af, a_index, bcut, bf, b_index, d2)
               !$OMP END TASK
