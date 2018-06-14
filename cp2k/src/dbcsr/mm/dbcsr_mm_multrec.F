@@ -573,7 +573,7 @@ integer :: i, ii
 
          ! if filtering is requested remove small blocks, unless the sparsity needs to be kept
          IF (this%use_eps .AND. .NOT. this%keep_sparsity) THEN
-            print *, "multrec filtering?"
+            !print *, "multrec filtering?"
             CALL multrec_filtering(this)
          ELSE
             do ithread=0,nthreads-1
@@ -780,7 +780,7 @@ integer :: i, ii
      ! print *,"sparse_multrec", d, ai, af, bi,bf, ithread
       !print *, "depthcond=", depthcond
       condition = (ithread .eq. 0 ) .and. (d .eq. nint(depthcond))
-      if (condition) print *, "condition", d, depthcond
+      !if (condition) print *, "condition", d, depthcond
       !condition = .False.
 
       !print *, "DEPTH=", d, " ithread=", ithread, "nthreads=",nthreads, "condition=", condition

@@ -2143,7 +2143,7 @@ endif
      !if we have duplicates then do this else don't bothere cos there are none to remove
      if (new_nblocks .ne. nblocks) then
       !$OMP MASTER
-      write(*,"(a,i5,a)") " Need to remove ",nblocks-new_nblocks,"  duplicates"
+      !write(*,"(a,i5,a)") " Need to remove ",nblocks-new_nblocks,"  duplicates"
       !$OMP END MASTER
 
         !count number of blocks in each row in new index
