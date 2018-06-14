@@ -586,7 +586,7 @@ CONTAINS
 
          ! Pre-size work arrays of matrix_a to avoid continuous reallocation.
          ! Overestimate for summetric matrix and multiple threads!
-         local_matrix_size = dbcsr_nfullrows_local(matrix_a)* &
+         local_matrix_size = INT(dbcsr_nfullrows_local(matrix_a), KIND=int_8)* &
               dbcsr_nfullcols_local(matrix_a)
          size_work = MAX(0, INT(MIN(local_matrix_size-INT(dbcsr_get_nze(matrix_a), KIND=int_8), &
                                     INT(dbcsr_get_nze(matrix_b), KIND=int_8)), KIND=int_4))
@@ -1167,7 +1167,7 @@ CONTAINS
 !> \brief note: does not check the symmetry of the data itself
 !> \param matrix_type ...
 !> \param data_type ...
-!> \retval symmetry_consistent ...
+!> \return ...
 ! **************************************************************************************************
    LOGICAL FUNCTION symmetry_consistent(matrix_type, data_type)
       CHARACTER, INTENT(IN)                    :: matrix_type
@@ -1200,7 +1200,7 @@ CONTAINS
 !> \brief data from matrix_a(source) to matrix_b(target)
 !> \param matrix_type_a ...
 !> \param matrix_type_b ...
-!> \retval symmetry_compatible ...
+!> \return ...
 ! **************************************************************************************************
    LOGICAL FUNCTION symmetry_compatible(matrix_type_a, matrix_type_b)
       CHARACTER, INTENT(IN)                    :: matrix_type_a, matrix_type_b
@@ -1527,7 +1527,7 @@ CONTAINS
 !> \param col1 ...
 !> \param row2 ...
 !> \param col2 ...
-!> \retval relation  Relation between positions 1 and 2.
+!> \return Relation between positions 1 and 2.
 !>                    0: same
 !>                   -1: pos1 < pos2
 !>                    1: pos1 > pos2
@@ -2253,7 +2253,7 @@ CONTAINS
 ! **************************************************************************************************
 !> \brief compute a norm of a dbcsr matrix
 !> \param[in] matrix  the matrix
-!> \retval norm ...
+!> \return ...
 ! **************************************************************************************************
    FUNCTION dbcsr_gershgorin_norm(matrix) RESULT(norm)
 
@@ -2347,7 +2347,7 @@ CONTAINS
 ! **************************************************************************************************
 !> \brief compute a norm of a dbcsr matrix
 !> \param[in] matrix  the matrix
-!> \retval norm ...
+!> \return ...
 ! **************************************************************************************************
    FUNCTION dbcsr_maxabs(matrix) RESULT(norm)
       TYPE(dbcsr_type), INTENT(INOUT)                    :: matrix
@@ -2393,7 +2393,7 @@ CONTAINS
 !> \brief compute a norm of a dbcsr matrix
 !> \param[in] matrix  the matrix
 !> \param local ...
-!> \retval norm ...
+!> \return ...
 ! **************************************************************************************************
    FUNCTION dbcsr_frobenius_norm(matrix, local) RESULT(norm)
 
@@ -2513,7 +2513,7 @@ CONTAINS
 !> \param trace ...
 ! **************************************************************************************************
    SUBROUTINE dbcsr_trace_a_b_d(matrix_a, matrix_b, trace)
-      TYPE(dbcsr_type), INTENT(INOUT)                    :: matrix_a, matrix_b
+      TYPE(dbcsr_type), INTENT(IN)                       :: matrix_a, matrix_b
       REAL(kind=real_8), INTENT(INOUT)                   :: trace
 
       CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_trace_a_b_d', &
@@ -2547,7 +2547,7 @@ CONTAINS
 !> \param trace ...
 ! **************************************************************************************************
    SUBROUTINE dbcsr_trace_a_any(matrix_a, trace)
-      TYPE(dbcsr_type), INTENT(INOUT)                    :: matrix_a
+      TYPE(dbcsr_type), INTENT(IN)                       :: matrix_a
       TYPE(dbcsr_scalar_type), INTENT(INOUT)             :: trace
 
       CHARACTER(len=*), PARAMETER :: routineN = 'dbcsr_trace_a_any', &
@@ -2580,7 +2580,7 @@ CONTAINS
 !> \param[in] col ...
 !> \param[in] block_row_limits ...
 !> \param[in] block_column_limits ...
-!> \retval dbcsr_block_in_limits ...
+!> \return ...
 ! **************************************************************************************************
    FUNCTION dbcsr_block_in_limits(row, col, block_row_limits, block_column_limits)
       INTEGER, INTENT(in)                                :: row, col
@@ -2688,7 +2688,7 @@ CONTAINS
 !> \brief Returns whether the matrix could be represeneted in a dense form
 !> \param[in] matrix          matrix
 !> \param occ_thresh ...
-!> \retval may_be_dense    use the mutable and not append-only working
+!> \return use the mutable and not append-only working
 !>                            structures
 ! **************************************************************************************************
    FUNCTION dbcsr_may_be_dense(matrix, occ_thresh) RESULT(may_be_dense)
@@ -2709,7 +2709,7 @@ CONTAINS
 ! **************************************************************************************************
 !> \brief Returns the occupation of the matrix
 !> \param matrix     matrix from which to get the occupation
-!> \retval occupation ...
+!> \return ...
 ! **************************************************************************************************
    FUNCTION dbcsr_get_occupation(matrix) RESULT(occupation)
       TYPE(dbcsr_type), INTENT(IN)                       :: matrix

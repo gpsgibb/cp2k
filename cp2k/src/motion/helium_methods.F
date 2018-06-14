@@ -22,7 +22,6 @@ MODULE helium_methods
    USE cp_output_handling,              ONLY: cp_printkey_is_on
    USE cp_subsys_types,                 ONLY: cp_subsys_get,&
                                               cp_subsys_type
-   USE cp_units,                        ONLY: cp_unit_from_cp2k
    USE f77_interface,                   ONLY: f_env_add_defaults,&
                                               f_env_rm_defaults,&
                                               f_env_type
@@ -34,8 +33,7 @@ MODULE helium_methods
                                               helium_write_setup
    USE helium_sampling,                 ONLY: helium_sample
    USE helium_types,                    ONLY: &
-        he_mass, helium_destroy_int_arr_ptr, helium_solvent_p_type, helium_solvent_type, &
-        hid_carbon, hid_chlorine, hid_hydrogen, hid_num, hid_oxygen, rho_atom_number, &
+        he_mass, helium_solvent_p_type, helium_solvent_type, rho_atom_number, &
         rho_moment_of_inertia, rho_num, rho_projected_area, rho_winding_cycle, rho_winding_number
    USE input_constants,                 ONLY: helium_cell_shape_cube,&
                                               helium_cell_shape_octahedron,&
@@ -209,8 +207,7 @@ CONTAINS
                      helium_env(k)%helium%plength_avrg, &
                      helium_env(k)%helium%plength_inst, &
                      helium_env(k)%helium%atom_plength, &
-                     helium_env(k)%helium%ename, &
-                     helium_env(k)%helium%eid &
+                     helium_env(k)%helium%ename &
                      )
 
             helium_env(k)%helium%ref_count = 1
@@ -874,7 +871,6 @@ CONTAINS
 
                ! deallocate solute-related arrays
                IF (helium_env(k)%helium%solute_present) THEN
-                  CALL helium_destroy_int_arr_ptr(helium_env(k)%helium%solute_i)
                   DEALLOCATE (helium_env(k)%helium%solute_element)
                   NULLIFY (helium_env(k)%helium%solute_element)
                END IF
@@ -883,11 +879,6 @@ CONTAINS
                IF (ASSOCIATED(helium_env(k)%helium%ename)) THEN
                   DEALLOCATE (helium_env(k)%helium%ename)
                   NULLIFY (helium_env(k)%helium%ename)
-               END IF
-
-               IF (ASSOCIATED(helium_env(k)%helium%eid)) THEN
-                  DEALLOCATE (helium_env(k)%helium%eid)
-                  NULLIFY (helium_env(k)%helium%eid)
                END IF
 
                DEALLOCATE (helium_env(k)%helium)
@@ -963,6 +954,15 @@ CONTAINS
          DO k = 1, SIZE(helium_env)
             CALL section_vals_val_get(helium_section, "GET_FORCES", &
                                       i_val=helium_env(k)%helium%get_helium_forces)
+         END DO
+
+         DO k = 1, SIZE(helium_env)
+            ! init center of mass
+            IF (helium_env(k)%helium%solute_present) THEN
+               helium_env(k)%helium%center(:) = pint_com_pos(pint_env)
+            ELSE
+               helium_env(k)%helium%center(:) = (/0.0_dp, 0.0_dp, 0.0_dp/)
+            END IF
          END DO
 
          ! init/restore coordinates
@@ -1075,6 +1075,7 @@ CONTAINS
 !> \date   2009-11-09
 !> \par    History
 !>         2016-07-14 Modified to work with independent helium_env [cschran]
+!>         2018-04-30 Usefull initialization for droplets [fuhl]
 !> \author Lukasz Walewski
 ! **************************************************************************************************
    SUBROUTINE helium_coord_init(helium_env)
@@ -1085,28 +1086,65 @@ CONTAINS
 
       INTEGER                                            :: ia, ib, ic, k
       REAL(KIND=dp)                                      :: r1, r2
+      REAL(KIND=dp), DIMENSION(3)                        :: rvek
 
       DO k = 1, SIZE(helium_env)
-         DO ia = 1, helium_env(k)%helium%atoms
-            DO ic = 1, 3
-               r1 = next_random_number(helium_env(k)%helium%rng_stream_uniform)
-               r1 = r1*helium_env(k)%helium%cell_size
+         IF (helium_env(k)%helium%periodic) THEN
+            DO ia = 1, helium_env(k)%helium%atoms
+               DO ic = 1, 3
+                  r1 = next_random_number(helium_env(k)%helium%rng_stream_uniform)
+                  r1 = r1*helium_env(k)%helium%cell_size
+                  DO ib = 1, helium_env(k)%helium%beads
+                     !TODO: use thermal gaussian instead
+                     r2 = next_random_number(helium_env(k)%helium%rng_stream_uniform)
+                     helium_env(k)%helium%pos(ic, ia, ib) = r1+0.1_dp*r2
+                  END DO
+               END DO
                DO ib = 1, helium_env(k)%helium%beads
-!TODO    use thermal gaussian instead
-                  r2 = next_random_number(helium_env(k)%helium%rng_stream_uniform)
-                  helium_env(k)%helium%pos(ic, ia, ib) = r1+0.1_dp*r2
+                  CALL helium_pbc(helium_env(k)%helium, helium_env(k)%helium%pos(:, ia, ib))
                END DO
             END DO
-            DO ib = 1, helium_env(k)%helium%beads
-               CALL helium_pbc(helium_env(k)%helium, helium_env(k)%helium%pos(:, ia, ib))
+         ELSE
+            DO ia = 1, helium_env(k)%helium%atoms
+               r2 = 2.0_dp*helium_env(k)%helium%droplet_radius**2
+               DO WHILE (r2 > (0.95_dp*helium_env(k)%helium%droplet_radius)**2)
+                  DO ic = 1, 3
+                     rvek(ic) = next_random_number(helium_env(k)%helium%rng_stream_uniform)
+                     rvek(ic) = 2.0_dp*rvek(ic)-1.0_dp
+                     rvek(ic) = rvek(ic)*0.95_dp*helium_env(k)%helium%droplet_radius
+                  END DO
+                  r2 = DOT_PRODUCT(rvek, rvek)
+                  ! make sure the helium does not collide with the solute
+                  IF (helium_env(k)%helium%solute_present) THEN
+                     IF (r2 <= 2.0_dp) r2 = 2.0_dp*helium_env(k)%helium%droplet_radius**2
+                  END IF
+               END DO
+               DO ib = 1, helium_env(k)%helium%beads
+                  DO ic = 1, 3
+                     r2 = next_random_number(helium_env(k)%helium%rng_stream_uniform)
+                     helium_env(k)%helium%pos(ic, ia, ib) = rvek(ic)+0.1_dp*r2
+                  END DO
+                  ! Make sure, that nothing lies outside the droplet radius
+                  r1 = DOT_PRODUCT(helium_env(k)%helium%pos(:, ia, ib), &
+                                   helium_env(k)%helium%pos(:, ia, ib))
+                  IF (r1 >= helium_env(k)%helium%droplet_radius**2) THEN
+                     r1 = SQRT(r1)
+                     helium_env(k)%helium%pos(:, ia, ib) = &
+                        helium_env(k)%helium%droplet_radius/r1* &
+                        helium_env(k)%helium%pos(:, ia, ib)
+                  END IF
+                  ! transfer to position around actual center of droplet
+                  helium_env(k)%helium%pos(:, ia, ib) = &
+                     helium_env(k)%helium%pos(:, ia, ib)+ &
+                     helium_env(k)%helium%center(:)
+               END DO
             END DO
-         END DO
 
+         END IF
          ! store positions at time slice nbeads+1 (rperez):
          DO ia = 1, helium_env(k)%helium%atoms
             helium_env(k)%helium%pos(:, ia, helium_env(k)%helium%beads+1) = helium_env(k)%helium%pos(:, ia, 1)
          END DO
-         ! initialize work array (rperez):
          helium_env(k)%helium%work = helium_env(k)%helium%pos
       END DO
 
@@ -2018,7 +2056,7 @@ CONTAINS
 !> \brief  Check whether property <prop> is activated in the input structure
 !> \param helium ...
 !> \param prop ...
-!> \retval is_active ...
+!> \return ...
 !> \date   2014-06-26
 !> \author Lukasz Walewski
 !> \note   The property is controlled by two items in the input structure,
@@ -2430,11 +2468,7 @@ CONTAINS
       CHARACTER(len=*), PARAMETER :: routineN = 'helium_set_solute_indices', &
          routineP = moduleN//':'//routineN
 
-      CHARACTER(LEN=2)                                   :: cur_ename
-      CHARACTER(len=default_path_length)                 :: msg_str
-      INTEGER                                            :: cur_eid, i, j, mnum, natoms
-      INTEGER, DIMENSION(hid_num)                        :: el_counts
-      LOGICAL                                            :: found
+      INTEGER                                            :: iatom, natoms
       REAL(KIND=dp)                                      :: mass
       TYPE(cp_subsys_type), POINTER                      :: my_subsys
       TYPE(f_env_type), POINTER                          :: my_f_env
@@ -2453,91 +2487,12 @@ CONTAINS
       NULLIFY (helium%solute_element)
       ALLOCATE (helium%solute_element(natoms))
 
-      NULLIFY (helium%ename, helium%eid)
-      ALLOCATE (helium%ename(hid_num))
-      ALLOCATE (helium%eid(hid_num))
-
-      NULLIFY (helium%solute_i)
-      ALLOCATE (helium%solute_i(hid_num))
-      DO i = 1, hid_num
-!TODO important to nullify here, otherwise helium_destroy_int_arr_ptr
-!     in helium_release will fail
-!     safer solution: change int_arr_ptr%iap from POINTER to ALLOCATABLE
-         NULLIFY (helium%solute_i(i)%iap)
-      END DO
-
       ! find out how many different atomic types are there
       helium%enum = 0
-      el_counts(:) = 0
-      DO i = 1, natoms
-         CALL get_atomic_kind(my_particles%els(i)%atomic_kind, mass=mass)
-         mnum = NINT(cp_unit_from_cp2k(mass, "amu"))
-         SELECT CASE (mnum)
-         CASE (35)
-            cur_ename = "CL"
-            cur_eid = hid_chlorine
-         CASE (16)
-            cur_ename = "O "
-            cur_eid = hid_oxygen
-         CASE (1)
-            cur_ename = "H "
-            cur_eid = hid_hydrogen
-         CASE (12)
-            cur_ename = "C "
-            cur_eid = hid_carbon
-         CASE DEFAULT
-            cur_ename = "XX"
-            cur_eid = -1
-            WRITE (msg_str, '(A,I0,A)') &
-               "Atomic mass number '", &
-               mnum, &
-               "' not supported by the HELIUM code."
-            CPABORT(msg_str)
-         END SELECT
-         helium%solute_element(i) = cur_ename
-         el_counts(cur_eid) = el_counts(cur_eid)+1
-         ! check if this element symbol is already present in element table
-         found = .FALSE.
-         DO j = 1, helium%enum
-            IF (helium%ename(j) == cur_ename) THEN
-               found = .TRUE.
-               EXIT
-            END IF
-         END DO
-         IF (.NOT. found) THEN
-            ! increase current number of different elements
-            helium%enum = helium%enum+1
-            helium%eid(helium%enum) = cur_eid
-            helium%ename(helium%enum) = cur_ename
-         END IF
-      END DO
-      CPASSERT(helium%enum .LE. hid_num)
-
-      DO i = 1, helium%enum
-         ALLOCATE (helium%solute_i(helium%eid(i))%iap(el_counts(helium%eid(i))))
-      END DO
-
-      ! store atomic indices of different atomic kinds
-      el_counts(:) = 0
-      DO i = 1, natoms
-         SELECT CASE (helium%solute_element (i))
-         CASE ("CL")
-            el_counts(hid_chlorine) = el_counts(hid_chlorine)+1
-            helium%solute_i(hid_chlorine)%iap(el_counts(hid_chlorine)) = i
-         CASE ("O ")
-            el_counts(hid_oxygen) = el_counts(hid_oxygen)+1
-            helium%solute_i(hid_oxygen)%iap(el_counts(hid_oxygen)) = i
-         CASE ("H ")
-            el_counts(hid_hydrogen) = el_counts(hid_hydrogen)+1
-            helium%solute_i(hid_hydrogen)%iap(el_counts(hid_hydrogen)) = i
-         CASE ("C ")
-            el_counts(hid_carbon) = el_counts(hid_carbon)+1
-            helium%solute_i(hid_carbon)%iap(el_counts(hid_carbon)) = i
-         CASE DEFAULT
-            WRITE (msg_str, '(A)') &
-               "Should never get here, check what happened!"
-            CPABORT(msg_str)
-         END SELECT
+      DO iatom = 1, natoms
+         CALL get_atomic_kind(my_particles%els(iatom)%atomic_kind, &
+                              mass=mass, &
+                              element_symbol=helium%solute_element(iatom))
       END DO
 
       RETURN

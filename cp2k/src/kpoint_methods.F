@@ -118,7 +118,7 @@ CONTAINS
       INTEGER                                            :: handle, i, ik, iounit, ir, is, natom, &
                                                             nr, ns
       INTEGER, ALLOCATABLE, DIMENSION(:)                 :: atype
-      LOGICAL                                            :: inv, spez, symmo
+      LOGICAL                                            :: spez
       REAL(KIND=dp)                                      :: wsum
       REAL(KIND=dp), ALLOCATABLE, DIMENSION(:, :)        :: coord, scoord
       TYPE(csym_type)                                    :: crys_sym
@@ -249,7 +249,7 @@ CONTAINS
                IF (.NOT. spez) EXIT ikloop
             END DO
          END DO ikloop
-         IF (.NOT. spez .AND. .NOT. (inv .AND. symmo)) THEN
+         IF (.NOT. spez) THEN
             ! Warning: real wfn might be wrong for this system
             CALL cp_warn(__LOCATION__, &
                          "A calculation using real wavefunctions is requested. "// &
@@ -838,7 +838,7 @@ CONTAINS
                CALL Fermikp(wocc(:, :, 1), mus(1), kTS, weig(:, :, 1), nel, wkp, &
                             smear%electronic_temperature, 2.0_dp)
             ELSE IF (smear%fixed_mag_mom > 0.0_dp) THEN
-               CPABORT("kpoints: Not supoorted")
+               CPABORT("kpoints: Smearing with fixed magnetic moments not (yet) supported")
                nel = REAL(ne_a, KIND=dp)
                CALL Fermikp(wocc(:, :, 1), mus(1), kTS, weig(:, :, 1), nel, wkp, &
                             smear%electronic_temperature, 1.0_dp)
@@ -853,7 +853,7 @@ CONTAINS
                mus(1:2) = mu
             END IF
          CASE DEFAULT
-            CPABORT("kpoints: Not supported")
+            CPABORT("kpoints: Selected smearing not (yet) supported")
          END SELECT
       ELSE
          ! fixed occupations (2/1)

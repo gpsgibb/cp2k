@@ -1272,6 +1272,7 @@ CONTAINS
             ! 1) loop over my local data and define a map for the proc to send data
             ALLOCATE (map_send_size(0:para_env_RPA%num_pe-1))
             map_send_size = 0
+            dummy_proc = 0
             DO jjB = my_group_L_start, my_group_L_end
                send_pcol = cp_fm_indxg2p(jjB, ncol_block, dummy_proc, &
                                          fm_mat_S%matrix_struct%first_p_pos(2), npcol)
@@ -4393,7 +4394,7 @@ CONTAINS
 
                   ! only correct levels for which contour deformation is enabled
                   DO n_level_gw = contour_def_start-(homo_beta-gw_corr_lev_occ_beta), &
-                                  contour_def_end-(homo_beta-gw_corr_lev_occ_beta)
+                     contour_def_end-(homo_beta-gw_corr_lev_occ_beta)
 
                      ! reset the values from analytic continuation
                      vec_gw_energ_beta(n_level_gw) = 0.0_dp

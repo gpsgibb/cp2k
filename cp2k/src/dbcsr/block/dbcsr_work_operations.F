@@ -1085,7 +1085,7 @@ CONTAINS
 ! **************************************************************************************************
 !> \brief Checks whether the matrix can be finalized with minimal copying.
 !> \param[in] matrix          matrix to check
-!> \retval quick              whether matrix can be quickly finalized
+!> \return whether matrix can be quickly finalized
 ! **************************************************************************************************
    FUNCTION can_quickly_finalize(matrix) RESULT(quick)
       TYPE(dbcsr_type), INTENT(IN)                       :: matrix
@@ -1376,7 +1376,7 @@ endif
 !> \param[in] row point to check
 !> \param[in] column point to check
 !> \param[in] limits         limits (low_row, high_row, low_col, high_col)
-!> \retval within_limits     whether the point is within the bounds
+!> \return whether the point is within the bounds
 ! **************************************************************************************************
 
    PURE FUNCTION within_limits(row, column, limits)
