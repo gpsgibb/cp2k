@@ -815,58 +815,113 @@ integer :: i, ii
             IF (M >= MAX(N, K)) cut = 1
             IF (K >= MAX(N, M)) cut = 2
             IF (N >= MAX(M, K)) cut = 3
-            SELECT CASE (cut)
-              CASE (1)
-                s1 = M/2
 
-                acut = find_cut_row(ai, af, a_index, mi+s1-1)
-                !print *, d, "cut M", acut
-                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
-                CALL sparse_multrec(this, left, right, mi, mi+s1-1, ni, nf, ki, kf, &
-                                   ai, acut-1, a_index, bi, bf, b_index, d+1)
-                !$OMP END TASK
-                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
-                CALL sparse_multrec(this, left, right, mi+s1, mf, ni, nf, ki, kf, &
-                                   acut, af, a_index, bi, bf, b_index, d+1)
-                !$OMP END TASK
-              CASE (2)
-                s1 = K/2
-                acut = find_cut_col(ai, af, a_index, ki+s1-1)
-                IF (dbg) THEN
-                  WRITE (*, *) N, s1, ni+s1-1, "/", ai, af, acut
-                  WRITE (*, '(3(I7))') a_index
-                ENDIF
-                bcut = find_cut_row(bi, bf, b_index, ki+s1-1)
-                !print *, d, "cut K", acut, bcut
-                IF (dbg) THEN
-                  WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
-                  WRITE (*, '(3(I7))') b_index
-                ENDIF
-                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
-                CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
-                                   ai, acut-1, a_index, bi, bcut-1, b_index, d+1)
-                !$OMP END TASK
-                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
-                CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
-                                   acut, af, a_index, bcut, bf, b_index, d+1)
-                !$OMP END TASK
-              CASE (3)
-                s1 = N/2
-                bcut = find_cut_col(bi, bf, b_index, ni+s1-1)
-                IF (dbg) THEN
-                  WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
-                  WRITE (*, '(3(I7))') b_index
-                ENDIF
-                !print *, d, "cut N", bcut
-                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
-                CALL sparse_multrec(this, left, right, mi, mf, ni, ni+s1-1, ki, kf, &
-                                   ai, af, a_index, bi, bcut-1, b_index, d+1)
-                !$OMP END TASK
-                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
-                CALL sparse_multrec(this, left, right, mi, mf, ni+s1, nf, ki, kf, &
-                                   ai, af, a_index, bcut, bf, b_index, d+1)
-                !$OMP END TASK
-            END SELECT
+            if (condition) then
+              SELECT CASE (cut)
+                CASE (1)
+                  s1 = M/2
+
+                  acut = find_cut_row(ai, af, a_index, mi+s1-1)
+                  !print *, d, "cut M", acut
+                  !$OMP TASK default(firstprivate) shared(this, left, right, a_index, b_index)
+                  CALL sparse_multrec(this, left, right, mi, mi+s1-1, ni, nf, ki, kf, &
+                                     ai, acut-1, a_index, bi, bf, b_index, d+1)
+                  !$OMP END TASK
+                  !$OMP TASK default(firstprivate) shared(this, left, right, a_index, b_index)
+                  CALL sparse_multrec(this, left, right, mi+s1, mf, ni, nf, ki, kf, &
+                                     acut, af, a_index, bi, bf, b_index, d+1)
+                  !$OMP END TASK
+                CASE (2)
+                  s1 = K/2
+                  acut = find_cut_col(ai, af, a_index, ki+s1-1)
+                  IF (dbg) THEN
+                    WRITE (*, *) N, s1, ni+s1-1, "/", ai, af, acut
+                    WRITE (*, '(3(I7))') a_index
+                  ENDIF
+                  bcut = find_cut_row(bi, bf, b_index, ki+s1-1)
+                  !print *, d, "cut K", acut, bcut
+                  IF (dbg) THEN
+                    WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
+                    WRITE (*, '(3(I7))') b_index
+                  ENDIF
+                  !$OMP TASK default(firstprivate) shared(this, left, right, a_index, b_index)
+                  CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
+                                     ai, acut-1, a_index, bi, bcut-1, b_index, d+1)
+                  !$OMP END TASK
+                  !$OMP TASK default(firstprivate) shared(this, left, right, a_index, b_index)
+                  CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
+                                     acut, af, a_index, bcut, bf, b_index, d+1)
+                  !$OMP END TASK
+                CASE (3)
+                  s1 = N/2
+                  bcut = find_cut_col(bi, bf, b_index, ni+s1-1)
+                  IF (dbg) THEN
+                    WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
+                    WRITE (*, '(3(I7))') b_index
+                  ENDIF
+                  !print *, d, "cut N", bcut
+                  !$OMP TASK default(firstprivate) shared(this, left, right, a_index, b_index)
+                  CALL sparse_multrec(this, left, right, mi, mf, ni, ni+s1-1, ki, kf, &
+                                     ai, af, a_index, bi, bcut-1, b_index, d+1)
+                  !$OMP END TASK
+                  !$OMP TASK default(firstprivate) shared(this, left, right, a_index, b_index)
+                  CALL sparse_multrec(this, left, right, mi, mf, ni+s1, nf, ki, kf, &
+                                     ai, af, a_index, bcut, bf, b_index, d+1)
+                  !$OMP END TASK
+              END SELECT
+
+            else
+
+              SELECT CASE (cut)
+                CASE (1)
+                  s1 = M/2
+
+                  acut = find_cut_row(ai, af, a_index, mi+s1-1)
+                  !print *, d, "cut M", acut
+
+                  CALL sparse_multrec(this, left, right, mi, mi+s1-1, ni, nf, ki, kf, &
+                                     ai, acut-1, a_index, bi, bf, b_index, d+1)
+
+                  CALL sparse_multrec(this, left, right, mi+s1, mf, ni, nf, ki, kf, &
+                                     acut, af, a_index, bi, bf, b_index, d+1)
+
+                CASE (2)
+                  s1 = K/2
+                  acut = find_cut_col(ai, af, a_index, ki+s1-1)
+                  IF (dbg) THEN
+                    WRITE (*, *) N, s1, ni+s1-1, "/", ai, af, acut
+                    WRITE (*, '(3(I7))') a_index
+                  ENDIF
+                  bcut = find_cut_row(bi, bf, b_index, ki+s1-1)
+                  !print *, d, "cut K", acut, bcut
+                  IF (dbg) THEN
+                    WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
+                    WRITE (*, '(3(I7))') b_index
+                  ENDIF
+
+                  CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
+                                     ai, acut-1, a_index, bi, bcut-1, b_index, d+1)
+
+                  CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
+                                     acut, af, a_index, bcut, bf, b_index, d+1)
+
+                CASE (3)
+                  s1 = N/2
+                  bcut = find_cut_col(bi, bf, b_index, ni+s1-1)
+                  IF (dbg) THEN
+                    WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
+                    WRITE (*, '(3(I7))') b_index
+                  ENDIF
+                  !print *, d, "cut N", bcut
+
+                  CALL sparse_multrec(this, left, right, mi, mf, ni, ni+s1-1, ki, kf, &
+                                     ai, af, a_index, bi, bcut-1, b_index, d+1)
+
+                  CALL sparse_multrec(this, left, right, mi, mf, ni+s1, nf, ki, kf, &
+                                     ai, af, a_index, bcut, bf, b_index, d+1)
+
+              END SELECT
+            endif
 
          END SUBROUTINE sparse_multrec
 
