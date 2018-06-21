@@ -390,6 +390,21 @@ integer :: i, ii
 
 !$OMP MASTER
 
+! nthreads=OMP_GET_NUM_THREADS()
+! do i=0,nthreads-1
+!   print *, "work matrix data for", i
+!   !this%product_wm => product%wms(ithread+1)
+!   !this%product_wm(i)%ptr => product%wms(i+1)
+!   print*, "wmsize", i,this%product_wm(i)%ptr%datasize
+!   print*, this%product_wm(i)%ptr%lastblk
+!   ii=this%product_wm(i)%ptr%lastblk
+!
+!   !print*, this%product_wm(i)%ptr%row_i(1:ii)
+!   !print*, this%product_wm(i)%ptr%col_i(1:ii)
+!   !print*, this%product_wm(i)%ptr%blk_p(1:ii)
+!   ! print *, "data=", this%product_wm(i)%ptr%data_area%d%r_sp(1:ii*16)
+! enddo
+
       this%flop = 0
 
       ! Find out the local A columns / B rows and sizes
@@ -416,11 +431,7 @@ integer :: i, ii
 !!$       t_a_f = left%thr_c(ithread+1)+1
 !!$       t_a_l = left%thr_c(ithread+2)
 !!$    ENDIF
-!open (unit=20,file="TASKRANGES")
-!open (unit=30,file="csrmultiplythreads")
-      !print *, "multrec_multiply", left%nblkrows_local, right%nblkcols_local, SIZE(k_locals)
-      !print *, "Multrec_multiply", t_a_f, t_a_l, left%coo_l
-      !print*, "Multrec_multiply", t_b_f, t_b_l, right%coo_l
+
       d=0
       !$OMP TASKGROUP
       CALL sparse_multrec(this, left, right, &
@@ -432,20 +443,16 @@ integer :: i, ii
                           d)
       !$OMP END TASKGROUP
 
-!print *, "Sparse multrec done"
+
 
 !$OMP END MASTER
 
 !$OMP TASKWAIT
 !$OMP BARRIER
 
-!$OMP Master
-!close (20)
-!close(30)
-!$OMP END MASTER
 
 !$ ithread=omp_get_thread_num()
-!print*, "ithread=",ithread
+
       CALL dbcsr_mm_csr_purge_stacks(this%csr(ithread), left, right)
 
 !$OMP BARRIER
@@ -453,20 +460,7 @@ integer :: i, ii
 !$OMP MASTER
 
       flop = flop+this%flop
-      nthreads=OMP_GET_NUM_THREADS()
-      !do i=0,nthreads-1
-      !  print *, "work matrix data for", i
-        !this%product_wm => product%wms(ithread+1)
-        !this%product_wm(i)%ptr => product%wms(i+1)
-       ! print*, "wmsize", i,this%product_wm(i)%ptr%datasize
-       ! print*, this%product_wm(i)%ptr%lastblk
-        ii=this%product_wm(i)%ptr%lastblk
 
-        !print*, this%product_wm(i)%ptr%row_i(1:ii)
-        !print*, this%product_wm(i)%ptr%col_i(1:ii)
-        !print*, this%product_wm(i)%ptr%blk_p(1:ii)
-        ! print *, "data=", this%product_wm(i)%ptr%data_area%d%r_sp(1:ii*16)
-     !enddo
 !$OMP END MASTER
 
 !$OMP BARRIER
@@ -571,9 +565,9 @@ integer :: i, ii
                                      this%original_lastblk(ithread)+1, this%product_wm(ithread)%ptr%lastblk)
           enddo
 
-         ! if filtering is requested remove small blocks, unless the sparsity needs to be kept
+          !if filtering is requested remove small blocks, unless the sparsity needs to be kept
          IF (this%use_eps .AND. .NOT. this%keep_sparsity) THEN
-            !print *, "multrec filtering?"
+        !    print *, "multrec filtering?"
             CALL multrec_filtering(this)
          ELSE
             do ithread=0,nthreads-1
@@ -761,10 +755,10 @@ integer :: i, ii
       LOGICAL, PARAMETER                                 :: dbg = .FALSE.
 
       INTEGER                                            :: acut, bcut, cut, K, M, N, s1
-      INTEGER :: ithread, nthreads, d2
+      INTEGER :: ithread, nthreads
       logical :: condition
-      integer :: mf1, mi2, acut1, acut2, nf1, ni2, bcut1, bcut2
       real :: depthcond
+
       !   ---------------------------------------------------------------------------
 
       ithread=0
@@ -772,23 +766,14 @@ integer :: i, ii
       nthreads=1
       !$ nthreads=omp_get_num_threads()
 
-      d2=d+1
-
+      ! we want to spawn tasks when 2**depth = 10 * nthreads
       depthcond = log(10.*nthreads)/log(2.)
 
 
-     ! print *,"sparse_multrec", d, ai, af, bi,bf, ithread
-      !print *, "depthcond=", depthcond
+
       condition = (ithread .eq. 0 ) .and. (d .eq. nint(depthcond))
-      !if (condition) print *, "condition", d, depthcond
-      !condition = .False.
-
-      !print *, "DEPTH=", d, " ithread=", ithread, "nthreads=",nthreads, "condition=", condition
-      !if (d .eq. 0 .and. ithread .eq. 0) print *, "aindex=",af,a_index(1,:)
 
 
-
-      !if (d .eq. 0) print *, "bindex=",bf,b_index(1,:)
 
             IF (dbg) THEN
                WRITE (*, '(I7,1X,5(A,2(1X,I7)))') d, " rm", mi, mf, ",", ni, nf, ",", ki, kf, "/", ai, af, ",", bi, bf
@@ -802,12 +787,7 @@ integer :: i, ii
 
 
             IF (af-ai+1 <= dbcsr_cfg%multrec_limit .AND. bf-bi+1 <= dbcsr_cfg%multrec_limit) THEN
-            !print *, d, af, ai, bf, bi, af-ai+1, bf-bi+1
-            !IF (af-ai+1 <= 16 .AND. bf-bi+1 <= 16) THEN
                IF (af-ai+1 .GT. 0 .AND. bf-bi+1 .GT. 0) THEN
-                  !print*, "max chunk size is", dbcsr_cfg%multrec_limit
-                  !write(30,*) ithread,af-ai+1,bf-bi+1,mi,mf,ni,nf,ki,kf,ai,af,bi,bf
-                  !print *, "chunk is small enough", mi,mf,ni,nf,ki,kf
                               CALL dbcsr_mm_csr_multiply(this%csr(ithread), left, right, &
                                              mi=mi, mf=mf, ni=ni, nf=nf, ki=ki, kf=kf, &
                                              ai=ai, af=af, &
@@ -819,97 +799,75 @@ integer :: i, ii
                                              flop=this%flop, &
                                              a_index=a_index, b_index=b_index, &
                                              a_norms=this%a_norms, b_norms=this%b_norms)
-                  !print *, "chunk multiplied. DEPTH=",d
                endif
                RETURN
             ENDIF
 
-            !if (d .gt. 20) STOP "Depth too large"
-
-           ! print *, "Cutting?"
 
             M = mf-mi+1
             N = nf-ni+1
             K = kf-ki+1
-            ! print*, "have to cut", M,N,K
+
             IF (dbg) THEN
             !   WRITE (*, *) 'm,k,n', M, K, N
             ENDIF
-            if (d>=0) then
-              IF (M >= MAX(N, K)) cut = 1
-              IF (K >= MAX(N, M)) cut = 2
-              IF (N >= MAX(M, K)) cut = 3
-            else
-              if (M>=N) cut=1
-              IF (N>M) cut=3
-            endif
-            SELECT CASE (cut)
-            CASE (1)
-               s1 = M/2
-               acut = find_cut_row(ai, af, a_index, mi+s1-1)
-              ! print *, "cut M",acut
-               mf1=mi+s1-1
-               acut1=acut-1
-              !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf1,ni,nf,ki,kf,ai,acut1,bi,bf,d2)
-              !if (condition) write(20,*) "m",omp_get_thread_num(),mi,mf1,ni,nf,ki,kf
-               CALL sparse_multrec(this, left, right, mi, mf1, ni, nf, ki, kf, &
-                                   ai, acut1, a_index, bi, bf, b_index, d2)
-              !$OMP END TASK
-              mi2=mi+s1
-              !$OMP TASK if(condition) FIRSTPRIVATE(mi2,mf,ni,nf,ki,kf,acut,af,bi,bf,d2)
-              !if (condition) write(20,*) "m",omp_get_thread_num(),mi2,mf,ni,nf,ki,kf
-               CALL sparse_multrec(this, left, right, mi2, mf, ni, nf, ki, kf, &
-                                   acut, af, a_index, bi, bf, b_index, d2)
-              !$OMP END TASK
-      !        /*!$OMP TASK if (condition)
-      !        print *, "I AM A TASK I AM ON THREAD", omp_get_thread_num()!
-      !        !$OMP END TASK*/
-            CASE (2)
 
-               s1 = K/2
-               acut = find_cut_col(ai, af, a_index, ki+s1-1)
-               IF (dbg) THEN
+            IF (M >= MAX(N, K)) cut = 1
+            IF (K >= MAX(N, M)) cut = 2
+            IF (N >= MAX(M, K)) cut = 3
+            SELECT CASE (cut)
+              CASE (1)
+                s1 = M/2
+
+                acut = find_cut_row(ai, af, a_index, mi+s1-1)
+                !print *, d, "cut M", acut
+                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
+                CALL sparse_multrec(this, left, right, mi, mi+s1-1, ni, nf, ki, kf, &
+                                   ai, acut-1, a_index, bi, bf, b_index, d+1)
+                !$OMP END TASK
+                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
+                CALL sparse_multrec(this, left, right, mi+s1, mf, ni, nf, ki, kf, &
+                                   acut, af, a_index, bi, bf, b_index, d+1)
+                !$OMP END TASK
+              CASE (2)
+                s1 = K/2
+                acut = find_cut_col(ai, af, a_index, ki+s1-1)
+                IF (dbg) THEN
                   WRITE (*, *) N, s1, ni+s1-1, "/", ai, af, acut
                   WRITE (*, '(3(I7))') a_index
-               ENDIF
-               bcut = find_cut_row(bi, bf, b_index, ki+s1-1)
-               IF (dbg) THEN
+                ENDIF
+                bcut = find_cut_row(bi, bf, b_index, ki+s1-1)
+                !print *, d, "cut K", acut, bcut
+                IF (dbg) THEN
                   WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
                   WRITE (*, '(3(I7))') b_index
-               ENDIF
-               !print *, "cut K", acut,bcut
-               !if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki,ki+s1-1
-               CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
-                                   ai, acut-1, a_index, bi, bcut-1, b_index, d2)
-               !if (condition) write(20,*) "k", omp_get_thread_num(),mi,mf,ni,nf,ki+s1,kf
-               CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
-                                   acut, af, a_index, bcut, bf, b_index, d2)
-            CASE (3)
-
-               s1 = N/2
-               bcut = find_cut_col(bi, bf, b_index, ni+s1-1)
-               IF (dbg) THEN
+                ENDIF
+                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
+                CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki, ki+s1-1, &
+                                   ai, acut-1, a_index, bi, bcut-1, b_index, d+1)
+                !$OMP END TASK
+                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
+                CALL sparse_multrec(this, left, right, mi, mf, ni, nf, ki+s1, kf, &
+                                   acut, af, a_index, bcut, bf, b_index, d+1)
+                !$OMP END TASK
+              CASE (3)
+                s1 = N/2
+                bcut = find_cut_col(bi, bf, b_index, ni+s1-1)
+                IF (dbg) THEN
                   WRITE (*, *) N, s1, ni+s1-1, "/", bi, bf, bcut
                   WRITE (*, '(3(I7))') b_index
-               ENDIF
-              !print *, "cut N", bcut
-              nf1=ni+s1-1
-              bcut1=bcut-1
-              !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf,ni,nf1,ki,kf,ai,af,bi,bcut1,d2)
-              !if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni,nf1,ki,kf
-               CALL sparse_multrec(this, left, right, mi, mf, ni, nf1, ki, kf, &
-                                   ai, af, a_index, bi, bcut1, b_index, d2)
-              !$OMP END TASK
-              ni2=ni+s1
-              !$OMP TASK if(condition) FIRSTPRIVATE(mi,mf,ni2,nf,ki,kf,ai,af,bcut,bf,d2)
-              !if (condition) write(20,*) "n", omp_get_thread_num(),mi,mf,ni2,nf,ki,kf
-               CALL sparse_multrec(this, left, right, mi, mf, ni2, nf, ki, kf, &
-                                   ai, af, a_index, bcut, bf, b_index, d2)
-              !$OMP END TASK
-      !        !$OMP TASK if(condition)
-      !        print *, "I AM A TASK I AM ON THREAD", omp_get_thread_num()
-      !        !$OMP END TASK
+                ENDIF
+                !print *, d, "cut N", bcut
+                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
+                CALL sparse_multrec(this, left, right, mi, mf, ni, ni+s1-1, ki, kf, &
+                                   ai, af, a_index, bi, bcut-1, b_index, d+1)
+                !$OMP END TASK
+                !$OMP TASK if(condition) default(firstprivate) shared(this, left, right, a_index, b_index)
+                CALL sparse_multrec(this, left, right, mi, mf, ni+s1, nf, ki, kf, &
+                                   ai, af, a_index, bcut, bf, b_index, d+1)
+                !$OMP END TASK
             END SELECT
+
          END SUBROUTINE sparse_multrec
 
 ! ***************************************************************************************************

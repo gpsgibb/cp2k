@@ -1607,7 +1607,7 @@ endif
       ELSE
          wm_datasize = wm%datasize
       ENDIF
-       !print*, "wm datasize", omp_get_thread_num(), wm%datasize, matrix%nze
+      ! print*, "wm datasize", omp_get_thread_num(), wm%datasize, matrix%nze
 
       nblks = wm%lastblk
 !$OMP     ATOMIC
@@ -1951,15 +1951,6 @@ endif
       !
       ALLOCATE (tmp_arr(max_row_count))
       ALLOCATE (blk_p_buff(max_row_count))
-      !allocate(duplicates(max_row_count,nrows))
-      !duplicates=0
-
-!!$OMP Master
-!print *, "size of duplicates=",size(duplicates)
-!print *, "max num of blocks=", new_row_p(nrows+1)
-!print *, "Merge index:"
-!!$OMP END MASTER
-!!$OMP BARRIER
 
       !
 !$OMP     DO
@@ -2042,12 +2033,6 @@ endif
          if (new_blk_p(t) .lt. 0) stop "NEGATIVE"
       enddo
     enddo
-
-      !do t=1,nwms
-      !  print *, "wm,data_offset", t, all_data_offsets(t)
-      !enddo
-
-      !print*, "number of duplicates=", sum(duplicates(1:new_row_p(nrows+1)))
 !$OMP END MASTER
       !
       DEALLOCATE (tmp_arr)
@@ -2116,8 +2101,6 @@ endif
      !print *, "N_elements=",n_elements
      !print*, "-----------------------------------------"
 
-     !if (.not. sort_data) error stop "you must set sort_data=.true. for now"
-
      allocate(tmp_row_p(nrows+1))
 
 
@@ -2142,9 +2125,10 @@ endif
 
      !if we have duplicates then do this else don't bothere cos there are none to remove
      if (new_nblocks .ne. nblocks) then
-      !$OMP MASTER
+     !if (omp_get_num_threads() .gt. 1) then
+      !!$OMP MASTER
       !write(*,"(a,i5,a)") " Need to remove ",nblocks-new_nblocks,"  duplicates"
-      !$OMP END MASTER
+      !!$OMP END MASTER
 
         !count number of blocks in each row in new index
 
@@ -2189,6 +2173,8 @@ endif
            new_blk_f = tmp_row_p(row+1)
 
            new_blk= new_blk_i
+
+
            !loop over old blocks, check for duplicate. If not, add into new block
            do old_blk=old_blk_i,old_blk_f
              if (duplicates(old_blk) .eq. 0) THEN
@@ -2196,9 +2182,14 @@ endif
                !this is not a duplicate - append it to our new indices
                new_blk_p(new_blk) = blk_p(old_blk)
                new_col_i(new_blk) = col_i(old_blk)
-               !if (sort_data) new_blk_d(new_blk) = blk_d(old_blk)
                new_blk_d(new_blk) = blk_d(old_blk)
                new_blk=new_blk+1
+
+               !debugging line
+               !offset_src=offsets(blk_d(old_blk)-1)
+               !call print_blocks(src_area=data_areas(blk_d(old_blk)),&
+               !                  src_blk=blk_p(old_blk)-offset_src, &
+               !                  row=row, col=col_i(old_blk))
 
 
              else
@@ -2218,7 +2209,7 @@ endif
                                  src_area=data_areas(blk_d(old_blk)),&
                                  src_blk=blk_p(old_blk)-offset_src, &
                                  size=block_size)
-               !! NEED TO CHANGE THIS TO REFLECT BLOCK SIZE
+
                local_elements=local_elements-block_size
              endif
            enddo
@@ -2278,9 +2269,9 @@ endif
         !$OMP BARRIER
 
     ELSE
-      !$OMP MASTER
-      !print *, "No need to remove duplicates"
-      !$OMP END MASTER
+      ! !$OMP MASTER
+      ! print *, "No need to remove duplicates"
+      ! !$OMP END MASTER
     endif
 
       !$OMP MASTER
@@ -2332,6 +2323,28 @@ endif
       end select
 
     end subroutine
+
+!! debugging routine
+    ! subroutine print_blocks(src_area, src_blk, row, col)
+    !   TYPE(dbcsr_data_obj), intent(in) ::  src_area
+    !   integer, intent(in) :: src_blk, row, col
+    !
+    !   select case (src_area%d%data_type)
+    !   case (dbcsr_type_real_4)
+    !     write(*,"('row=',i2,'col=',i2,':',f8.4)") row, col, src_area%d%r_sp(src_blk)
+    !   case (dbcsr_type_real_8)
+    !     write(*,"('row=',i2,'col=',i2,':',f8.4)") row, col, src_area%d%r_dp(src_blk)
+    !   case (dbcsr_type_complex_4)
+    !     write(*,"('row=',i2,'col=',i2,':',f8.4,f8.4)") row, col, src_area%d%c_sp(src_blk)
+    !   case (dbcsr_type_complex_8)
+    !     write(*,"('row=',i2,'col=',i2,':',f8.4,f8.4)") row, col, src_area%d%c_dp(src_blk)
+    !   case default
+    !     print *, "Error: Invalid or not-implemented dbcsr_data type!"
+    !     print *, "Selected type=",src_area%d%data_type
+    !     stop
+    !   end select
+    !
+    ! end subroutine
 
 
 #:include "dbcsr_work_operations.f90"
