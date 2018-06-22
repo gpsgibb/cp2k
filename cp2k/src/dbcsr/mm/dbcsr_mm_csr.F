@@ -435,8 +435,9 @@ CONTAINS
                stacks_data(p_b_first, s_dp, ws) = b_blk_info(2, b_blk)
                stacks_data(p_c_first, s_dp, ws) = offset
                stacks_data(p_c_blk, s_dp, ws) = c_blk_id
-
+               !$OMP ATOMIC
                flop = flop+INT(2*c_nze, int_8)*INT(k_size, int_8)
+               !$OMP END ATOMIC
 
                IF (stacks_fillcount(ws) >= SIZE(stacks_data, 2)) &
                   CALL flush_stacks(this, left=left, right=right)
