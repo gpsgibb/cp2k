@@ -1698,9 +1698,10 @@ CONTAINS
             IF (metronome == nsteps_k .AND. v_ki == min_nimages-1) &
                CALL dbcsr_mm_multrec_phaseout(multrec(ithread)%p)
 !!$OMP BARRIER
-            CALL timeset(routineN//"_multrec", handle2)
+
 !             !!$ print *, "I am the master thread and I am thread number",omp_get_thread_num()
 !$OMP END MASTER
+CALL timeset(routineN//"_multrec", handle2)
 
             CALL dbcsr_mm_multrec_multiply(multrec(0)%p, &
                                            left=left_buffer_calc%mats(1, v_ki+1), &
@@ -1742,9 +1743,10 @@ CONTAINS
                END DO
             END IF
 !$OMP BARRIER
-            CALL timestop(handle2)
+CALL timestop(handle2)
 
 !$OMP END PARALLEL
+
             flop_total = flop_total+flop_single
          ENDDO
 
