@@ -203,7 +203,7 @@ CONTAINS
       INTEGER, DIMENSION(:), POINTER                     :: c_local_cols, c_local_rows
 
 !$    INTEGER, DIMENSION(:), POINTER           :: product_thread_dist
-integer :: i, ii
+      integer :: i
 !   ---------------------------------------------------------------------------
 
       CALL timeset(routineN, handle)
@@ -377,8 +377,7 @@ integer :: i, ii
       INTEGER                                            :: ithread, nthreads
       INTEGER                                            :: t_a_f, t_a_l, t_b_f, t_b_l
       INTEGER, DIMENSION(:), POINTER                     :: k_locals
-      integer :: d, i
-      integer :: ii
+      integer :: d
 
 !   ---------------------------------------------------------------------------
 
